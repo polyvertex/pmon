@@ -93,7 +93,7 @@ sub proc_loadavg
     # expected output format from /proc/loadavg:
     # avg1 avg2 avg3 running_threads/total_threads last_running_pid
     my $file = '/proc/loadavg';
-    open(my $fh, '<', $file) or die "Failed to open $file! $!\n"
+    open(my $fh, '<', $file) or die "Failed to open $file! $!\n";
     chomp(my @values = split(/[\s\/]+/, <$fh>));
     close $fh;
     die "Unrecognized output format from $file!\n"
@@ -113,7 +113,7 @@ sub proc_stat
     my @cpu_usage1 = ( 0, 0, 0, 0 );
     my @cpu_usage2 = ( 0, 0, 0, 0 );
 
-    open($fh, '</proc/stat') or die "Failed to open /proc/stat! $!\n"
+    open($fh, '</proc/stat') or die "Failed to open /proc/stat! $!\n";
     @stats = <$fh>;
     close $fh;
 
@@ -129,14 +129,14 @@ sub proc_stat
     unless (-e CPU_STATS_STORAGE_FILE)
     {
         open($fh, '>', CPU_STATS_STORAGE_FILE)
-          or die "Failed to create ", CPU_STATS_STORAGE_FILE, "! $!\n"
+          or die "Failed to create ", CPU_STATS_STORAGE_FILE, "! $!\n";
         print $fh @stats;
         close $fh;
     }
     else
     {
         open($fh, '+<', CPU_STATS_STORAGE_FILE)
-            or die "Failed to open ", CPU_STATS_STORAGE_FILE, "! $!\n"
+            or die "Failed to open ", CPU_STATS_STORAGE_FILE, "! $!\n";
         while (<$fh>)
         {
             @cpu_usage1 = ( $1, $2, $3, $4 )
