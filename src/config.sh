@@ -41,7 +41,7 @@ function usage()
     echo "* $THIS_SCRIPT_NAME install-all [install_dir] [revision]"
     echo "  To install or reinstall the PMon Daemon (server) and the PMon Agent"
     echo "  altogether in the specified directory or, by default, in the same"
-    echo "  directory than this scrips."
+    echo "  directory than this scripts."
     echo ""
     echo "* $THIS_SCRIPT_NAME install-agent [install_dir] [revision]"
     echo "  To install or reinstall the PMon Agent in the specified directory or,"
@@ -178,11 +178,11 @@ function do_install()
     [ -e "$INSTALL_DIR/etc" ] || mkdir -p "$INSTALL_DIR/etc"
     [ -e "$INSTALL_DIR/var" ] || mkdir -p "$INSTALL_DIR/var"
     if [ $INSTALL_AGENT -ne 0 ]; then
-        [ -e "$INSTALL_DIR/etc/scrips-available" ] || mkdir "$INSTALL_DIR/etc/scrips-available"
-        [ -e "$INSTALL_DIR/etc/scrips-daily" ] || mkdir "$INSTALL_DIR/etc/scrips-daily"
-        [ -e "$INSTALL_DIR/etc/scrips-hourly" ] || mkdir "$INSTALL_DIR/etc/scrips-hourly"
-        [ -e "$INSTALL_DIR/etc/scrips-minute" ] || mkdir "$INSTALL_DIR/etc/scrips-minute"
-        [ -e "$INSTALL_DIR/etc/scrips-minute" ] || die 1 "Failed to create directories in $INSTALL_DIR/etc!"
+        [ -e "$INSTALL_DIR/etc/scripts-available" ] || mkdir "$INSTALL_DIR/etc/scripts-available"
+        [ -e "$INSTALL_DIR/etc/scripts-daily" ] || mkdir "$INSTALL_DIR/etc/scripts-daily"
+        [ -e "$INSTALL_DIR/etc/scripts-hourly" ] || mkdir "$INSTALL_DIR/etc/scripts-hourly"
+        [ -e "$INSTALL_DIR/etc/scripts-minute" ] || mkdir "$INSTALL_DIR/etc/scripts-minute"
+        [ -e "$INSTALL_DIR/etc/scripts-minute" ] || die 1 "Failed to create directories in $INSTALL_DIR/etc!"
     fi
 
     # install config files
@@ -203,7 +203,7 @@ function do_install()
     # install scripts in the 'available' directory
     if [ $INSTALL_AGENT -ne 0 ]; then
         for srcfile in $TMP_DIR/svnexport/scripts/*; do
-            local destfile="$INSTALL_DIR/etc/scrips-available/$(basename "$srcfile")"
+            local destfile="$INSTALL_DIR/etc/scripts-available/$(basename "$srcfile")"
             if [ -e "$destfile" ]; then
                 cmp_files "$srcfile" "$destfile"
                 [ $? -ne 0 ] && destfile="$destfile.dist"
@@ -214,10 +214,10 @@ function do_install()
         # if it is the first time we install, create default links to the
         # scripts we want to run
         if [ $first_install_agent -ne 0 ]; then
-            local dir_avail="$INSTALL_DIR/etc/scrips-available"
-            local dir_daily="$INSTALL_DIR/etc/scrips-daily"
-            local dir_hourly="$INSTALL_DIR/etc/scrips-hourly"
-            local dir_minute="$INSTALL_DIR/etc/scrips-minute"
+            local dir_avail="$INSTALL_DIR/etc/scripts-available"
+            local dir_daily="$INSTALL_DIR/etc/scripts-daily"
+            local dir_hourly="$INSTALL_DIR/etc/scripts-hourly"
+            local dir_minute="$INSTALL_DIR/etc/scripts-minute"
 
             ln -s "$dir_avail/system.sh" "$dir_daily/"
             ln -s "$dir_avail/usage.pl" "$dir_minute/"
@@ -303,5 +303,5 @@ case "$ACTION" in
         ;;
 esac
 
-#cleanup
+cleanup
 exit 0

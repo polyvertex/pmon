@@ -23,12 +23,13 @@ BEGIN
     #unshift @INC, $MY_DIR;
 }
 
-
-#-------------------------------------------------------------------------------
-sub is_windows
+use constant
 {
-    $^O =~ /^MSWin/i;
-}
+    IS_WINDOWS => $^O =~ /^MSWin/i,
+
+    FRESH_INSTALL_FILE => $MY_DIR.'/../var/.installed-daemon',
+};
+
 
 #-------------------------------------------------------------------------------
 sub usage
@@ -78,8 +79,11 @@ usage unless defined $options{'configfile'};
 usage unless defined $options{'logfile'};
 usage unless defined $options{'pidfile'};
 
+# right we do nothing specific when we just have been (re)installed
+unlink FRESH_INSTALL_FILE if -e FRESH_INSTALL_FILE;
+
 # daemonize if wanted
-unless (is_windows() or $options{'foreground'})
+unless (IS_WINDOWS or $options{'foreground'})
 {
     require POSIX;
 
@@ -116,7 +120,7 @@ open($hlog, '>>', $options{'logfile'})
 }
 
 # open syslog
-unless (is_windows())
+unless (IS_WINDOWS)
 {
     require Sys::Syslog;
     Sys::Syslog::openlog('pmond', 'pid', 'user');
@@ -145,7 +149,7 @@ $SIG{'__WARN__'} = sub
             $a[2], $a[1], $a[0];
         print $hlog $datetime, $msg;
         Sys::Syslog::syslog(Sys::Syslog::LOG_WARNING(), $msg)
-            unless is_windows();
+            unless IS_WINDOWS;
     }
 };
 
@@ -164,7 +168,7 @@ $SIG{'__WARN__'} = sub
 # close syslog and log file and delete pid file
 END
 {
-    Sys::Syslog::closelog() unless is_windows();
+    Sys::Syslog::closelog() unless IS_WINDOWS;
     close $hlog if defined $hlog;
     unlink $options{'pidfile'}
         if defined($options{'pidfile'}) and -e $options{'pidfile'};

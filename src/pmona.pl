@@ -27,9 +27,9 @@ BEGIN { $MY_DIR = (__FILE__ =~ /(.*)[\\\/]/) ? $1 : '.'; }
 use constant
 {
     # paths
-    SCRIPTS_DIR => $MY_DIR.'/../etc/scripts',
-    CONFIG_FILE => $MY_DIR.'/../etc/agent.conf',
-    PID_FILE    => $MY_DIR.'/../var/pmona.pid',
+    SCRIPTS_DIR_BASE => $MY_DIR.'/../etc/scripts-',
+    CONFIG_FILE      => $MY_DIR.'/../etc/pmona.conf',
+    PID_FILE         => $MY_DIR.'/../var/pmona.pid',
 
     # maximum running time for a script
     CHILDREN_TIMEOUT => 45, # seconds
@@ -228,7 +228,7 @@ if (-e PID_FILE)
     # check machine id
     die "Setting 'machine_uniq' not found or have incorrect format in ", CONFIG_FILE, "!\n"
         unless defined($config{'machine_uniq'})
-        and $config{'machine_uniq'} =~ /^\w+$/a;
+        and $config{'machine_uniq'} =~ /^\w+$/;
 
     # server host
     die "Setting 'server_host' not found or have incorrect format in ", CONFIG_FILE, "!\n"
@@ -283,7 +283,7 @@ if (-e PID_FILE)
     my $ls = $config{'cmd_ls'}.' -1';
     foreach my $group (@groups)
     {
-        my $d = SCRIPTS_DIR."/$group";
+        my $d = SCRIPTS_DIR_BASE."$group";
         my @fnames = qx/$ls "$d"/;
         die "Failed to collect scripts from $d!\n"
             unless ($? >> 8) == 0;
@@ -431,7 +431,7 @@ else
     my $info = 'agent.status '.scalar(@errors).' '.$errors[0];
     if (length($info) > MAX_INFO_LENGTH)
     {
-        $info  = substr $info, 0, MAX_INFO_LENGTH - 3);
+        $info  = substr $info, 0, MAX_INFO_LENGTH - 3;
         $info .= '...';
     }
     send_info $info;
