@@ -90,16 +90,17 @@ function cmp_files()
     [ "$tmpa" != "$tmpb" ] && return 1
 
     # check content byte-per-byte
-    if [ which cmp &> /dev/null ]; then
+    which cmp &> /dev/null
+    if [ $? -eq 0 ]; then
         cmp --quiet "$a" "$b"
         return $?
-    elif [ which md5sum &> /dev/null ]; then
+    else
+        which md5sum &> /dev/null
+        [ $? -eq 0 ] || die 1 "Could not find a way to compare files on a byte-per-byte basis. Please install either 'cmp' or 'md5sum' command!"
         tmpa=$(md5sum "$a" | cut -d' ' -f1)
         tmpb=$(md5sum "$b" | cut -d' ' -f1)
         [ "$tmpa" == "$tmpb" ] && return 0
         return 1
-    else
-        die 1 "Could not find a way to compare files on a byte-per-byte basis. Please install either 'cmp' or 'md5sum' command!"
     fi
 }
 
@@ -121,8 +122,8 @@ function svn_get()
     echo
 
     # extract revision number
-    REVISION=$(cat "$TMP_FILE" | grep -e "^Exported revision [0-9]\+\.\$" | cut -d' ' -f3 | tr -d '.')
-    rm -f "$TMP_FILE"
+    REVISION=$(grep '^Exported revision' "$TMP_FILE" | cut -d' ' -f3 | tr -d '.')
+    #rm -f "$TMP_FILE"
     [ -z "$REVISION" ] && die 1 "Failed to get SVN revision number!"
     echo "Exported revision $REVISION."
 
@@ -154,8 +155,12 @@ function pre_install()
 #-------------------------------------------------------------------------------
 function do_install()
 {
-    local first_install=1
+    local first_install_daemon=1
+    local first_install_agent=1
     local tmp
+
+    # install config script
+    #mv -f "$TMP_DIR/svnexport/config.sh" "$INSTALL_DIR/"
 
     # install revision files
     mv -f "$TMP_DIR/svnexport/.revision" "$INSTALL_DIR/"
@@ -163,12 +168,15 @@ function do_install()
 
     # restore user's files that were originally installed if needed
     if [ -e "$TMP_DIR/etc" ]; then
-        first_install=0
+        [ -e "$TMP_DIR/etc/pmond.conf" ] && first_install_daemon=0
+        [ -e "$TMP_DIR/etc/pmona.conf" ] && first_install_agent=0
         mv -f "$TMP_DIR/etc" "$INSTALL_DIR/"
     fi
 
     # create directories structure
+    [ -e "$INSTALL_DIR/bin" ] || mkdir -p "$INSTALL_DIR/bin"
     [ -e "$INSTALL_DIR/etc" ] || mkdir -p "$INSTALL_DIR/etc"
+    [ -e "$INSTALL_DIR/var" ] || mkdir -p "$INSTALL_DIR/var"
     if [ $INSTALL_AGENT -ne 0 ]; then
         [ -e "$INSTALL_DIR/etc/scrips-available" ] || mkdir "$INSTALL_DIR/etc/scrips-available"
         [ -e "$INSTALL_DIR/etc/scrips-daily" ] || mkdir "$INSTALL_DIR/etc/scrips-daily"
@@ -178,15 +186,16 @@ function do_install()
     fi
 
     # install config files
-    tmp=
-    [ $INSTALL_AGENT -ne 0 ] && tmp=$tmp pmona
-    [ $INSTALL_DAEMON -ne 0 ] && tmp=$tmp pmond
+    tmp=""
+    [ $INSTALL_AGENT -ne 0 ] && tmp="$tmp pmona"
+    [ $INSTALL_DAEMON -ne 0 ] && tmp="$tmp pmond"
     if [ -n "$tmp" ]; then
         for name in $tmp; do
             if [ -e "$INSTALL_DIR/etc/$name.conf" ]; then
-                mv -f "$TMP_DIR/svnexport/$name.sample.conf" "$INSTALL_DIR/etc/"
+                mv -f "$TMP_DIR/svnexport/$name.sample.conf" "$INSTALL_DIR/etc/$name.conf.dist"
             else
                 mv "$TMP_DIR/svnexport/$name.sample.conf" "$INSTALL_DIR/etc/$name.conf"
+                [ -e "$INSTALL_DIR/etc/$name.conf.dist" ] && rm -f "$INSTALL_DIR/etc/$name.conf.dist"
             fi
         done
     fi
@@ -204,15 +213,20 @@ function do_install()
 
         # if it is the first time we install, create default links to the
         # scripts we want to run
-        if [ $first_install -eq 0 ]; then
-            # TODO @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            echo > /dev/null
+        if [ $first_install_agent -ne 0 ]; then
+            local dir_avail="$INSTALL_DIR/etc/scrips-available"
+            local dir_daily="$INSTALL_DIR/etc/scrips-daily"
+            local dir_hourly="$INSTALL_DIR/etc/scrips-hourly"
+            local dir_minute="$INSTALL_DIR/etc/scrips-minute"
+
+            ln -s "$dir_avail/system.sh" "$dir_daily/"
+            ln -s "$dir_avail/usage.pl" "$dir_minute/"
         fi
     fi
 
     # install agent's perl files
     if [ $INSTALL_AGENT -ne 0 ]; then
-        [ -e "$INSTALL_DIR/bin" ] && mkdir -p "$INSTALL_DIR/bin"
+        [ -e "$INSTALL_DIR/bin" ] || mkdir -p "$INSTALL_DIR/bin"
         for fname in pmona.pl; do
             mv -f "$TMP_DIR/svnexport/$fname" "$INSTALL_DIR/bin/"
         done
@@ -221,13 +235,16 @@ function do_install()
 
     # install daemon's perl files
     if [ $INSTALL_DAEMON -ne 0 ]; then
-        [ -e "$INSTALL_DIR/bin" ] && mkdir -p "$INSTALL_DIR/bin"
         for fname in PMon pmond.pl pmond.sh; do
             mv -f "$TMP_DIR/svnexport/$fname" "$INSTALL_DIR/bin/"
         done
         chmod 0750 "$INSTALL_DIR/bin/pmond.pl"
         chmod 0750 "$INSTALL_DIR/bin/pmond.sh"
     fi
+
+    # touch flag files to notify daemon/agent that this is a fresh install
+    [ $INSTALL_AGENT -ne 0 ] && touch "$INSTALL_DIR/var/.installed-agent"
+    [ $INSTALL_DAEMON -ne 0 ] && touch "$INSTALL_DIR/var/.installed-daemon"
 
     chmod -R o-rwx "$INSTALL_DIR"
 }
@@ -240,23 +257,26 @@ INSTALL_DIR="$2"
 REVISION="$3"
 
 [ -z "$ACTION" ] && usage && exit 1
-[ -z "$INSTALL_DIR" ] && INSTALL_DIR=$THIS_SCRIPT_DIR
+[ -z "$INSTALL_DIR" ] && INSTALL_DIR="$THIS_SCRIPT_DIR"
 [ -z "$REVISION" ] && REVISION="HEAD"
 
-for cmd in which basename bash cat chmod chown cut date dirname head grep mv readlink rm stat svn tr; do
+for cmd in which basename bash cat chmod chown cut date dirname head grep ln mv readlink rm stat svn tr; do
     which $cmd &> /dev/null
     [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
 done
 
-if [ -z "$PMON_CONFIG_BOOSTRAPPED_FROM" ]; then
+#if [ -e "$THIS_SCRIPT_DIR/.devmode" ]; then
     cleanup
     svn_get
-    s=$TMP_DIR/svnexport/config.sh
-    [ -e "$s" ] || die 1 "Could not find config script $s!"
-    chmod 0750 "$s"
-    PMON_CONFIG_BOOSTRAPPED_FROM="$THIS_SCRIPT" bash -- "$s" $*
-    exit $?
-fi
+#elif [ -z "$PMON_CONFIG_BOOSTRAPPED_FROM" ]; then
+#    cleanup
+#    svn_get
+#    s="$TMP_DIR/svnexport/config.sh"
+#    [ -e "$s" ] || die 1 "Could not find config script $s!"
+#    chmod 0750 "$s"
+#    PMON_CONFIG_BOOSTRAPPED_FROM="$THIS_SCRIPT" bash -- "$s" $*
+#    exit $?
+#fi
 
 case "$ACTION" in
     uninstall|clean)
@@ -283,5 +303,5 @@ case "$ACTION" in
         ;;
 esac
 
-cleanup
+#cleanup
 exit 0
