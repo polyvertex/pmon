@@ -1,0 +1,39 @@
+
+* séparation client / serveur (i.e.: agent / daemon)
+  * client :
+    * récupération puis envoi minimal des données
+    * envoi atomique des données (à la fin du process de récup)
+    * gestion des pb de connexion :
+      timeout ? essais ? on s'en fout (vu qu'on lance le client toutes les minutes) ?
+  * serveur : gestion des bases, gestion des sous-bases (rrdtool), affichage
+  -> mais où mettre le serveur !!!
+* proposer une option pour maj TOUTES les infos (pour first-time, short-uptime ou reinstall)
+* selon le type de données, il faut :
+  * conserver TOUT l'historique
+  * conserver un historique limité (en jours OU en nombre de remontées)
+* si uptime < 15 minutes, maj TOUTES les données
+* les sub-scripts doivent être lancés selon des pools de priorité par exemple :
+  connections != ping
+* données à afficher :
+  * uptime
+  * distrib + version
+  * kernel + version
+  * cpu info (name, frequency, cache, cores)
+  * cpu usage (?)
+  * cpu load
+  * mem usage (phys, swap, total)
+  * processes (?)
+  * logged-in users
+  * disks space (each)
+  * disks temperature
+  * network traffic (each, total)
+  * network (listen, established count)
+  * dir size
+  -
+  * ping (google, free)
+  * bind (queries/hour)
+  * apache (hits/hour, bytes/seconds)
+  * lighttpd (hits/hour, bytes/seconds)
+  * postfix queue
+  * dovecot connections
+  * mysql
