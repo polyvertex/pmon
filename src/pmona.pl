@@ -233,7 +233,7 @@ if (-e PID_FILE)
     # server host
     die "Setting 'server_host' not found or have incorrect format in ", CONFIG_FILE, "!\n"
         unless defined($config{'server_host'})
-        and $config{'server_addr'} =~ /^[0-9A-Za-z\.\-_]+$/;
+        and $config{'server_host'} =~ /^[0-9A-Za-z\.\-_]+$/;
 
     # server port
     die "Incorrect value of 'server_port' in ", CONFIG_FILE, "!\n"
