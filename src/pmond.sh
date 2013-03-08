@@ -37,7 +37,7 @@ NAME=pmond
 CONFIG_FILE="$ROOT_DIR/etc/${NAME}.conf"
 PID_FILE="$ROOT_DIR/var/${NAME}.pid"
 LOG_FILE="$ROOT_DIR/var/${NAME}.log"
-RELOADCONF_SIGNAL=USR1
+RELOADCONF_SIGNAL=HUP
 
 
 #-------------------------------------------------------------------------------
@@ -132,9 +132,9 @@ case "$ACTION" in
     stop)
         stop
         ;;
-    reload)
-        reload
-        ;;
+#    reload)
+#        reload
+#        ;;
     restart)
         stop
         start $*
@@ -143,7 +143,7 @@ case "$ACTION" in
         status
         ;;
     *)
-        echo "Usage: $0 {start|stop|reload|restart|status} [daemon start parameters]"
+        echo "Usage: $0 {start|stop|restart|status} [daemon start parameters]"
         ;;
 esac
 
