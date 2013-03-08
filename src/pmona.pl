@@ -27,6 +27,7 @@ BEGIN { $MY_DIR = (__FILE__ =~ /(.*)[\\\/]/) ? $1 : '.'; }
 use constant
 {
     # paths
+    REVISION_FILE      => $MY_DIR.'/../.revision',
     SCRIPTS_DIR_BASE   => $MY_DIR.'/../etc/scripts-',
     CONFIG_FILE        => $MY_DIR.'/../etc/pmona.conf',
     PID_FILE           => $MY_DIR.'/../var/pmona.pid',
@@ -49,6 +50,7 @@ use constant
 # global variables
 my %config;
 my $now = time;
+my $revision = 0;
 my $tzoffset = Time::Local::timegm(localtime $now) - $now; # timezone offset in seconds
 my $uptime;
 my $pidfile_installed;
@@ -199,6 +201,18 @@ if (-e PID_FILE)
     $pidfile_installed = 1;
 }
 
+# try to get agent's revision number
+if (-e REVISION_FILE)
+{
+    if (open my $fh, '<', REVISION_FILE)
+    {
+        $revision = <$fh>;
+        chomp $revision;
+        $revision = 0 unless $revision =~ /^\d+$/;
+        close $fh;
+    }
+}
+
 # read configuration file
 {
     # setup accepted values
@@ -302,6 +316,7 @@ if (-e PID_FILE)
 }
 
 # send info we've got
+send_info "pmona.revision $revision";
 send_info "sys.tzoffset $tzoffset";
 send_info "sys.uptime $uptime";
 
