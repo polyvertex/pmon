@@ -146,7 +146,16 @@ sub on_agent_info
     my ($self, $info) = @_[OBJECT, ARG0];
 
     #warn "From ", $info->addr_str, ": ", $info->line, "\n";
-    $self->{'db'}->commit_info($info->machine, $info->time, $info->key, $info->value);
+    return unless $info->is_valid;
+
+    if ($info->key eq 'sys.uptime')
+    {
+        $self->{'db'}->commit_uptime($info->machine, $info->time, $info->value);
+    }
+    else
+    {
+        $self->{'db'}->commit_info($info->machine, $info->time, $info->key, $info->value);
+    }
 }
 
 
