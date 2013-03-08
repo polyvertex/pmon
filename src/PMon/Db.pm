@@ -31,14 +31,14 @@ use constant
 sub new
 {
     my $class = shift;
-    my %opt   = @_;
+    my %args  = @_;
     my $self  = bless { }, $class;
 
     foreach (qw( source user pass ))
     {
         die "Parameter '$_' not defined!"
-            unless exists($opt{$_}) and defined($opt{$_});
-        $self->{$_} = $opt{$_};
+            unless exists($args{$_}) and defined($args{$_});
+        $self->{$_} = $args{$_};
     }
 
     $self->{'dbh'}      = undef;
@@ -61,6 +61,9 @@ sub shutdown
 {
     my $self = shift;
     my $poe_session = $poe_kernel->get_active_session;
+
+    # kill timer
+    $poe_kernel->delay('db_connect');
 
     # smooth disconnect
     $poe_kernel->post($poe_session, 'db_disconnect', 1);
@@ -175,7 +178,7 @@ sub commit_info
         warn $@;
         $self->{'dbh'}->rollback
             or warn "Failed to rollback transaction after errors (", $self->{'dbh'}->err, ")! ", $self->{'dbh'}->errstr, "\n";
-        if ($err == MYSQLERR_SERVER_GONE_ERROR)
+        if (defined($err) and $err == MYSQLERR_SERVER_GONE_ERROR)
         {
             warn "Reconnecting to database...\n";
             $poe_kernel->yield('db_disconnect', 0);
@@ -199,6 +202,7 @@ sub on_connect
     my $db_user = $self->{'user'};
     my $db_pass = $self->{'pass'};
 
+    $poe_kernel->delay('db_connect'); # kill timer
     return if defined $self->{'dbh'};
 
     $self->{'dbh'} = DBI->connect(
@@ -290,12 +294,10 @@ sub on_disconnect
 sub _read_machines
 {
     my $self = shift;
-    my $sth;
-    my $row;
 
     return unless $self->is_connected;
 
-    $sth = $self->{'dbh'}->prepare('SELECT id, name FROM machine');
+    my $sth = $self->{'dbh'}->prepare('SELECT id, name FROM machine');
     unless (defined $sth->execute)
     {
         warn 'Failed to fetch machines from db ('.$sth->err.')! ', $sth->errstr, "\n";
@@ -303,7 +305,7 @@ sub _read_machines
     }
 
     $self->{'machines'} = { };
-    while ($row = $sth->fetchrow_hashref)
+    while (my $row = $sth->fetchrow_hashref)
     {
         $self->{'machines'}{$row->{'name'}} = $row->{'id'};
     }
@@ -313,15 +315,18 @@ sub _read_machines
 sub _machine_id
 {
     my ($self, $machine_name) = @_;
-    my $id;
 
     sub _match_machine
     {
         my ($ref_machines, $name) = @_;
-        while (my ($k, $id) = each %$ref_machines)
+        while (my ($k, $v) = each %$ref_machines)
         {
             # case-insensitive test
-            return $id if lc($name) eq lc($k);
+            if (lc($name) eq lc($k))
+            {
+                keys %$ref_machines; # reset
+                return $v;
+            }
         }
         return;
     }
@@ -330,7 +335,7 @@ sub _machine_id
     return unless defined $self->{'machines'}; # in case _read_machines() failed
 
     # if we already know this machine, just return its id...
-    $id = _match_machine $self->{'machines'}, $machine_name;
+    my $id = _match_machine $self->{'machines'}, $machine_name;
     return $id if defined $id;
 
     # ... otherwise, we have to register it

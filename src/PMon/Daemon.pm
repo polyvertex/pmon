@@ -26,7 +26,7 @@ our $SELF;
 sub new
 {
     my $class = shift;
-    my %opt   = @_;
+    my %args  = @_;
     my $self  = bless { }, $class;
 
     die if defined $SELF;
@@ -35,11 +35,11 @@ sub new
     foreach (qw( configfile ))
     {
         die "Parameter '$_' not defined!"
-            unless exists($opt{$_}) and defined($opt{$_});
+            unless exists($args{$_}) and defined($args{$_});
     }
 
     $self->{'config'} = PMon::Config->new(
-        file   => $opt{'configfile'},
+        file   => $args{'configfile'},
         strict => 1);
 
     $self->{'db'}  = undef;
@@ -54,9 +54,11 @@ sub new
         },
         object_states => [
             $self => {
-                _start  => 'on_start',
-                _stop   => 'on_stop',
-                sigtrap => 'on_signal',
+                _start     => 'on_start',
+                _stop      => 'on_stop',
+                sigtrap    => 'on_signal',
+                shutdown   => 'on_shutdown',
+                agent_info => 'on_agent_info',
             },
         ],
     );
@@ -117,6 +119,12 @@ sub on_stop
 }
 
 #----------------------------------------------------------------------------
+sub on_shutdown
+{
+    $_[OBJECT]->_shutdown if defined $_[OBJECT];
+}
+
+#----------------------------------------------------------------------------
 sub on_signal
 {
     my ($self, $poe_session, $sig, $ex) = @_[OBJECT, SESSION, ARG0, ARG1];
@@ -130,6 +138,15 @@ sub on_signal
         $self->_shutdown;
         $poe_kernel->sig_handled;
     }
+}
+
+#----------------------------------------------------------------------------
+sub on_agent_info
+{
+    my ($self, $info) = @_[OBJECT, ARG0];
+
+    #warn "From ", $info->addr_str, ": ", $info->line, "\n";
+    $self->{'db'}->commit_info($info->machine, $info->time, $info->key, $info->value);
 }
 
 

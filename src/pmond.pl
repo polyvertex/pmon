@@ -134,8 +134,8 @@ $SIG{'__WARN__'} = sub
 
     unless ($msg =~ /\n\z/)
     {
-      my ($packname, $file, $line) = caller;
-      $msg .= " at $file line $line.\n";
+        my ($packname, $file, $line) = caller;
+        $msg .= " at $file line $line.\n";
     }
 
     if (-t STDERR)
@@ -155,7 +155,7 @@ $SIG{'__WARN__'} = sub
 
 # launch service
 {
-    my $daemon = PMon::Daemon->new(configfile => $options{'configfile'});
+    PMon::Daemon->new(configfile => $options{'configfile'});
     eval { POE::Kernel->run; };
     if ($@)
     {
