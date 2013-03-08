@@ -95,11 +95,38 @@ sub qi
 }
 
 #-------------------------------------------------------------------------------
+sub commit_uptime
+{
+    my ($self, $machine_name, $unix, $uptime) = @_;
+    my $machine_id = $self->_machine_id($machine_name);
+
+    return unless defined $machine_id;
+    return unless $uptime =~ /^\d+$/;
+
+    my $sth = $self->{'sth'}{'up_machine'};
+    my $res = $sth->execute($unix, $uptime, $machine_id);
+    unless ($res > 0)
+    {
+        warn "Failed to update machine uptime (", $sth->err, ")! ", $sth->errstr, "\n";
+        if ($sth->err == MYSQLERR_SERVER_GONE_ERROR)
+        {
+            warn "Reconnecting to database...\n";
+            $poe_kernel->yield('db_disconnect', 0);
+            $poe_kernel->yield('db_connect');
+        }
+        return 0;
+    }
+
+    return 1;
+}
+
+#-------------------------------------------------------------------------------
 sub commit_info
 {
     my ($self, $machine_name, $unix, $key, $value) = @_;
     my $machine_id = $self->_machine_id($machine_name);
     my $err;
+    my $return = 1;
 
     return unless defined $machine_id;
     chomp $value;
@@ -175,6 +202,7 @@ sub commit_info
     };
     if ($@)
     {
+        $return = 0;
         warn $@;
         $self->{'dbh'}->rollback
             or warn "Failed to rollback transaction after errors (", $self->{'dbh'}->err, ")! ", $self->{'dbh'}->errstr, "\n";
@@ -189,7 +217,7 @@ sub commit_info
     # restore default mode
     $self->{'dbh'}{'AutoCommit'} = 1;
 
-    return 1;
+    return $return;
 }
 
 
@@ -228,6 +256,12 @@ sub on_connect
 
         $self->{'sth'}{'ins_machine'} = $self->{'dbh'}->prepare(
             'INSERT INTO machine (name) VALUES (?)');
+        $step++;
+
+        $self->{'sth'}{'up_machine'} = $self->{'dbh'}->prepare(qq{
+            UPDATE machine SET unix = ?, uptime = ?
+            WHERE id = ?
+            LIMIT 1 });
         $step++;
 
         $self->{'sth'}{'ins_info'} = $self->{'dbh'}->prepare(
