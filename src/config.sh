@@ -236,6 +236,7 @@ function do_install()
     # install daemon's perl files
     if [ $INSTALL_DAEMON -ne 0 ]; then
         for fname in PMon pmond.pl pmond.sh; do
+            [ -d "$INSTALL_DIR/bin/$fname" ] && rm -rf "$INSTALL_DIR/bin/$fname"
             mv -f "$TMP_DIR/svnexport/$fname" "$INSTALL_DIR/bin/"
         done
         chmod 0750 "$INSTALL_DIR/bin/pmond.pl"
