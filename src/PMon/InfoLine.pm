@@ -57,14 +57,14 @@ sub new
             $self->{'key'}     = $key;
             $self->{'value'}   = $value;
         }
-        elsif (defined $self->{'addr_packed'})
-        {
-            warn "Malformed info line to/from ", $self->addr_str, "! Line: ", $self->{'line'}, "\n";
-        }
-        else
-        {
-            warn "Malformed info line: ", $self->{'line'}, "\n";
-        }
+        #elsif (defined $self->{'addr_packed'})
+        #{
+        #    warn "Malformed info line to/from ", $self->addr_str, "! Line: ", $self->{'line'}, "\n";
+        #}
+        #else
+        #{
+        #    warn "Malformed info line: ", $self->{'line'}, "\n";
+        #}
     }
 
     return $self;

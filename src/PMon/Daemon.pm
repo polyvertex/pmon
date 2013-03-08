@@ -148,7 +148,6 @@ sub on_agent_info
     my ($self, $info) = @_[OBJECT, ARG0];
 
     #warn "From ", $info->addr_str, ": ", $info->line, "\n";
-    return unless $info->is_valid;
 
     if ($info->key eq 'sys.uptime')
     {

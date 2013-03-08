@@ -52,11 +52,15 @@ sub get
         {
             last unless $self->{$addr} =~ s/^(.*?)(\x0D\x0A?|\x0A\x0D?)//s;
             next unless length($1) > 0; # can happen
-            push @infos, PMon::InfoLine->new(
+
+            my $info = PMon::InfoLine->new(
                 addr_packed => $addr,
                 is_received => 1,
-                line        => $1
+                line        => $1,
             );
+            next unless $info->is_valid;
+
+            push @infos, $info;
         }
         delete $self->{$addr} if $self->{$addr} eq '';
     }
