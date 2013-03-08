@@ -382,12 +382,6 @@ sub _machine_id
 
     # ... otherwise, we have to register it
     {
-        unless (length($machine_name) > 0 and $machine_name =~ /^\w+$/)
-        {
-            warn "Invalid characters found in machine name \"$machine_name\"!\n";
-            return;
-        }
-
         my $sth = $self->{'sth'}{'ins_machine'};
         my $res = $sth->execute($machine_name);
         if ($res != 1)
