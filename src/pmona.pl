@@ -229,7 +229,7 @@ if (-e PID_FILE)
     # check machine name
     die "Setting 'machine_uniq' not found or have incorrect format in ", CONFIG_FILE, "!\n"
         unless defined($config{'machine_uniq'})
-        and $config{'machine_uniq'} =~ /^\w+$/;
+        and $config{'machine_uniq'} =~ /^[\w\-\_\.]+$/;
 
     # server host
     die "Setting 'server_host' not found or have incorrect format in ", CONFIG_FILE, "!\n"

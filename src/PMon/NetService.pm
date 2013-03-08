@@ -182,9 +182,9 @@ sub new
 
         if (defined($value) and
             $magic eq 'pmon1' and
-            $machine =~ /^\w+$/ and
+            $machine =~ /^[\w\-\_\.]+$/ and
             $time =~ /^\d+$/ and
-            $key =~ /^[\w\_\-\.]+$/)
+            $key =~ /^[\w\-\_\.]+$/)
         {
             $self->{'magic'}   = $magic;
             $self->{'machine'} = $machine;
