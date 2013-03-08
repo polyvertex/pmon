@@ -12,24 +12,24 @@ use warnings;
 use Getopt::Long ();
 use POE;
 
-use PMon::Daemon;
-
-
 # declare our own local "lib" directory
 my $MY_DIR;
 BEGIN
 {
     $MY_DIR = (__FILE__ =~ /(.*)[\\\/]/) ? $1 : '.';
-    #unshift @INC, $MY_DIR;
+    unshift @INC, $MY_DIR;
 }
+
+use PMon::Daemon;
 
 use constant
 {
-    IS_WINDOWS => $^O =~ /^MSWin/i,
-
     FRESH_INSTALL_FILE => $MY_DIR.'/../var/.installed-daemon',
 };
 
+
+#-------------------------------------------------------------------------------
+sub IS_WINDOWS () { $^O =~ /^MSWin/i }
 
 #-------------------------------------------------------------------------------
 sub usage
@@ -168,7 +168,11 @@ $SIG{'__WARN__'} = sub
 # close syslog and log file and delete pid file
 END
 {
-    Sys::Syslog::closelog() unless IS_WINDOWS;
+    unless (IS_WINDOWS)
+    {
+        require Sys::Syslog;
+        Sys::Syslog::closelog();
+    }
     close $hlog if defined $hlog;
     unlink $options{'pidfile'}
         if defined($options{'pidfile'}) and -e $options{'pidfile'};

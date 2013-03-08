@@ -98,7 +98,7 @@ start()
         return 1
     fi
 
-    perl "${DIR}/${NAME}.pl"
+    perl "${DIR}/${NAME}.pl" \
         --config "$CONFIG_FILE" \
         --log "$LOG_FILE" \
         --pid "$PID_FILE" \
