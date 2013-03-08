@@ -92,6 +92,8 @@ sub on_start
     my ($self, $poe_session) = @_[OBJECT, SESSION];
     my $fh;
 
+    warn "Starting (pid $$)...\n";
+
     # register signal handlers
     $poe_kernel->sig(INT  => 'sigtrap');
     $poe_kernel->sig(TERM => 'sigtrap');
