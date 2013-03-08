@@ -75,34 +75,34 @@ function die()
 }
 
 #-------------------------------------------------------------------------------
-function cmp_files()
-{
-    # returns 0 when files are equal or a non null value otherwise
-
-    local a=$1
-    local b=$2
-    local tmpa
-    local tmpb
-
-    # check size
-    tmpa=$(stat -c%s "$a")
-    tmpb=$(stat -c%s "$b")
-    [ "$tmpa" != "$tmpb" ] && return 1
-
-    # check content byte-per-byte
-    which cmp &> /dev/null
-    if [ $? -eq 0 ]; then
-        cmp --quiet "$a" "$b"
-        return $?
-    else
-        which md5sum &> /dev/null
-        [ $? -eq 0 ] || die 1 "Could not find a way to compare files on a byte-per-byte basis. Please install either 'cmp' or 'md5sum' command!"
-        tmpa=$(md5sum "$a" | cut -d' ' -f1)
-        tmpb=$(md5sum "$b" | cut -d' ' -f1)
-        [ "$tmpa" == "$tmpb" ] && return 0
-        return 1
-    fi
-}
+#function cmp_files()
+#{
+#    # returns 0 when files are equal or a non null value otherwise
+#
+#    local a=$1
+#    local b=$2
+#    local tmpa
+#    local tmpb
+#
+#    # check size
+#    tmpa=$(stat -c%s "$a")
+#    tmpb=$(stat -c%s "$b")
+#    [ "$tmpa" != "$tmpb" ] && return 1
+#
+#    # check content byte-per-byte
+#    which cmp &> /dev/null
+#    if [ $? -eq 0 ]; then
+#        cmp --quiet "$a" "$b"
+#        return $?
+#    else
+#        which md5sum &> /dev/null
+#        [ $? -eq 0 ] || die 1 "Could not find a way to compare files on a byte-per-byte basis. Please install either 'cmp' or 'md5sum' command!"
+#        tmpa=$(md5sum "$a" | cut -d' ' -f1)
+#        tmpb=$(md5sum "$b" | cut -d' ' -f1)
+#        [ "$tmpa" == "$tmpb" ] && return 0
+#        return 1
+#    fi
+#}
 
 #-------------------------------------------------------------------------------
 function svn_get()
@@ -204,10 +204,10 @@ function do_install()
     if [ $INSTALL_AGENT -ne 0 ]; then
         for srcfile in $TMP_DIR/svnexport/scripts/*; do
             local destfile="$INSTALL_DIR/etc/scripts-available/$(basename "$srcfile")"
-            if [ -e "$destfile" ]; then
-                cmp_files "$srcfile" "$destfile"
-                [ $? -ne 0 ] && destfile="$destfile.dist"
-            fi
+            #if [ -e "$destfile" ]; then
+            #    cmp_files "$srcfile" "$destfile"
+            #    [ $? -ne 0 ] && destfile="$destfile.dist"
+            #fi
             mv -f "$srcfile" "$destfile"
         done
 
