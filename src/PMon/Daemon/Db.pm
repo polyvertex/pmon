@@ -50,10 +50,16 @@ sub new
     $poe_kernel->state('db_connect', $self, 'on_connect');
     $poe_kernel->state('db_disconnect', $self, 'on_disconnect');
 
+    return $self;
+}
+
+#-------------------------------------------------------------------------------
+sub start
+{
+    my $self = shift;
+
     # connect
     $poe_kernel->yield('db_connect');
-
-    return $self;
 }
 
 #-------------------------------------------------------------------------------

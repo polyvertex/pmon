@@ -105,11 +105,13 @@ sub on_start
         source => $self->{'config'}->get_str('db_source'),
         user   => $self->{'config'}->get_str('db_user'),
         pass   => $self->{'config'}->get_str('db_pass') );
+    $self->{'db'}->start;
 
     # start network service
     $self->{'net'} = PMon::Daemon::Net->new(
         bind_addr => $self->{'config'}->get_str('service_bind_addr'),
         bind_port => $self->{'config'}->get_int('service_port') );
+    $self->{'net'}->start;
 }
 
 #----------------------------------------------------------------------------

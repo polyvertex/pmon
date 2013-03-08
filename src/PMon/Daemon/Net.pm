@@ -54,7 +54,17 @@ sub new
     $poe_kernel->state('udpsvc_listener_read', $self, 'on_listener_read');
     $poe_kernel->state('udpsvc_listener_error', $self, 'on_listener_error');
 
-    # start listening
+    return $self;
+}
+
+#-------------------------------------------------------------------------------
+sub start
+{
+    my $self = shift;
+
+    die if keys(%{$self->{'factories'}}) > 0;
+    die if keys(%{$self->{'listeners'}}) > 0;
+
     foreach my $addr (@{$self->{'bind_addr'}})
     {
         my $factory = POE::Wheel::SocketFactory->new(
@@ -73,8 +83,6 @@ sub new
             label   => "$addr:".$self->{'bind_port'},
         };
     }
-
-    return $self;
 }
 
 #-------------------------------------------------------------------------------
@@ -111,6 +119,9 @@ sub on_factory_success
         wheel => $wheel,
     };
     delete $self->{'factories'}{$factory_id};
+
+    warn "Network service started.\n"
+        if scalar(keys %{$self->{'listeners'}}) >= scalar(@{$self->{'bind_addr'}})
 }
 
 #-------------------------------------------------------------------------------
@@ -141,6 +152,12 @@ sub on_listener_error
     warn "Error on UDP socket ", $self->{'listeners'}{$wheel_id}{'label'},
         " while calling $syscall()! Error $errno: $errstr\n";
     delete $self->{'listeners'}{$wheel_id};
+
+    if (keys %{$self->{'listeners'}} <= 0)
+    {
+        warn "All network listeners went down! Trying to restart...\n";
+        $self->start;
+    }
 }
 
 
