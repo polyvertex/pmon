@@ -303,6 +303,8 @@ sub on_connect
 
     # commit enqueued data if needed
     #$self->commit;
+
+    warn "Connected to DB.\n";
 }
 
 #-------------------------------------------------------------------------------
@@ -312,7 +314,7 @@ sub on_disconnect
 
     if (defined $self->{'dbh'})
     {
-        $self->commit if $commit_first; # flush remaining enqueued data
+        #$self->commit if $commit_first; # flush remaining enqueued data
         warn "Disconnecting from DB...\n" if $commit_first;
 
         $self->{'sth'} = undef;

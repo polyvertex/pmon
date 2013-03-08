@@ -83,7 +83,7 @@ usage unless defined $options{'pidfile'};
 unlink FRESH_INSTALL_FILE if -e FRESH_INSTALL_FILE;
 
 # daemonize if wanted
-unless (IS_WINDOWS or $options{'foreground'})
+unless (IS_WINDOWS() or $options{'foreground'})
 {
     require POSIX;
 
@@ -91,7 +91,7 @@ unless (IS_WINDOWS or $options{'foreground'})
 
     my $pid = fork;
     die "Failed to fork! $!\n" unless defined $pid;
-    exit 0 if $pid != 0; # parent process must leave now
+    exit 0 if $pid != 0; # exit parent process
 
     # detach ourselves from the terminal
     POSIX::setsid() != -1
@@ -111,19 +111,19 @@ open($hlog, '>>', $options{'logfile'})
     or die "Failed to open log file ", $options{'logfile'}, "! $!\n";
 #print $hlog "\n";
 
+# open syslog
+unless (IS_WINDOWS)
+{
+    require Sys::Syslog;
+    Sys::Syslog::openlog('pmond', 'pid', 'user');
+}
+
 # create pid file
 {
     open(my $fh, '>', $options{'pidfile'})
         or die "Failed to create PID file ", $options{'pidfile'}, "!\n";
     print $fh "$$\n";
     close $fh;
-}
-
-# open syslog
-unless (IS_WINDOWS)
-{
-    require Sys::Syslog;
-    Sys::Syslog::openlog('pmond', 'pid', 'user');
 }
 
 # define our trap for warns
@@ -148,15 +148,20 @@ $SIG{'__WARN__'} = sub
             $a[5] + 1900, $a[4] + 1, $a[3],
             $a[2], $a[1], $a[0];
         print $hlog $datetime, $msg;
-        Sys::Syslog::syslog(Sys::Syslog::LOG_WARNING(), $msg)
-            unless IS_WINDOWS;
+
+        unless (IS_WINDOWS)
+        {
+            $msg = substr($msg, 0, 150).' ...' if length($msg) > 150;
+            Sys::Syslog::syslog(Sys::Syslog::LOG_WARNING(), $msg);
+        }
     }
 };
 
 # launch service
 {
+    $poe_kernel->has_forked;
     PMon::Daemon->new(configfile => $options{'configfile'});
-    eval { POE::Kernel->run; };
+    eval { POE::Kernel->run };
     if ($@)
     {
         chomp(my $errstr = $@);
@@ -166,16 +171,13 @@ $SIG{'__WARN__'} = sub
 }
 
 # close syslog and log file and delete pid file
-END
+unless (IS_WINDOWS)
 {
-    unless (IS_WINDOWS)
-    {
-        require Sys::Syslog;
-        Sys::Syslog::closelog();
-    }
-    close $hlog if defined $hlog;
-    unlink $options{'pidfile'}
-        if defined($options{'pidfile'}) and -e $options{'pidfile'};
+    require Sys::Syslog;
+    Sys::Syslog::closelog();
 }
+close $hlog if defined $hlog;
+unlink $options{'pidfile'}
+    if defined($options{'pidfile'}) and -e $options{'pidfile'};
 
 exit $exitcode;

@@ -98,6 +98,8 @@ start()
         return 1
     fi
 
+    rm -f "$PID_FILE"
+
     perl "${DIR}/${NAME}.pl" \
         --config "$CONFIG_FILE" \
         --log "$LOG_FILE" \
