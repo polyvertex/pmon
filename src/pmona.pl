@@ -27,9 +27,10 @@ BEGIN { $MY_DIR = (__FILE__ =~ /(.*)[\\\/]/) ? $1 : '.'; }
 use constant
 {
     # paths
-    SCRIPTS_DIR_BASE => $MY_DIR.'/../etc/scripts-',
-    CONFIG_FILE      => $MY_DIR.'/../etc/pmona.conf',
-    PID_FILE         => $MY_DIR.'/../var/pmona.pid',
+    SCRIPTS_DIR_BASE   => $MY_DIR.'/../etc/scripts-',
+    CONFIG_FILE        => $MY_DIR.'/../etc/pmona.conf',
+    PID_FILE           => $MY_DIR.'/../var/pmona.pid',
+    FRESH_INSTALL_FILE => $MY_DIR.'/../var/.installed-agent',
 
     # maximum running time for a script
     CHILDREN_TIMEOUT => 45, # seconds
@@ -266,6 +267,14 @@ if (-e PID_FILE)
     my $now_hour  = $anow[2];
     my $now_min   = $anow[1];
     my $force_all = (@ARGV > 0 and $ARGV[0] eq '--forceall') ? 1 : 0;
+
+    # launch all scripts if it is the first time the agent is launched since
+    # last install
+    if (-e FRESH_INSTALL_FILE)
+    {
+        $force_all = 1;
+        unlink FRESH_INSTALL_FILE;
+    }
 
     warn "All scripts forced.\n" if $force_all;
 
