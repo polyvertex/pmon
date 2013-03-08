@@ -13,8 +13,8 @@ use warnings;
 use POE;
 
 use PMon::Config;
-use PMon::Db;
-use PMon::NetService;
+use PMon::Daemon::Db;
+use PMon::Daemon::Net;
 
 
 # singleton
@@ -101,13 +101,13 @@ sub on_start
     #$poe_kernel->sig(USR2 => 'sigtrap');
 
     # connect to db
-    $self->{'db'} = PMon::Db->new(
+    $self->{'db'} = PMon::Daemon::Db->new(
         source => $self->{'config'}->get_str('db_source'),
         user   => $self->{'config'}->get_str('db_user'),
         pass   => $self->{'config'}->get_str('db_pass') );
 
     # start network service
-    $self->{'net'} = PMon::NetService->new(
+    $self->{'net'} = PMon::Daemon::Net->new(
         bind_addr => $self->{'config'}->get_str('service_bind_addr'),
         bind_port => $self->{'config'}->get_int('service_port') );
 }
