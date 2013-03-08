@@ -17,21 +17,21 @@ sub new
 {
     my $class = shift;
     my $self  = bless { }, $class;
-    my %opt   = @_;
+    my %args  = @_;
 
     $self->{'file'} =
-        (exists($opt{'file'}) and defined($opt{'file'})) ?
-        $opt{'file'} :
+        (exists($args{'file'}) and defined($args{'file'})) ?
+        $args{'file'} :
         undef;
 
     $self->{'strict'} = # type strictness
-        (exists($opt{'strict'}) and defined($opt{'strict'})) ?
-        $opt{'strict'} :
+        (exists($args{'strict'}) and defined($args{'strict'})) ?
+        $args{'strict'} :
         1;
 
     $self->{'subst'} =
-        (exists($opt{'subst'}) and defined($opt{'subst'})) ?
-        $opt{'subst'} :
+        (exists($args{'subst'}) and defined($args{'subst'})) ?
+        $args{'subst'} :
         { };
 
     $self->{'settings'} = { };

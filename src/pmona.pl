@@ -225,7 +225,7 @@ if (-e PID_FILE)
     }
     close $fh;
 
-    # check machine id
+    # check machine name
     die "Setting 'machine_uniq' not found or have incorrect format in ", CONFIG_FILE, "!\n"
         unless defined($config{'machine_uniq'})
         and $config{'machine_uniq'} =~ /^\w+$/;
