@@ -120,8 +120,7 @@ sub on_factory_success
     };
     delete $self->{'factories'}{$factory_id};
 
-    warn "Network service started.\n"
-        if scalar(keys %{$self->{'listeners'}}) >= scalar(@{$self->{'bind_addr'}})
+    warn "Listening on ", $self->{'listeners'}{$wheel->ID}{'label'}, ".\n";
 }
 
 #-------------------------------------------------------------------------------
