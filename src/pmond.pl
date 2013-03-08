@@ -106,9 +106,11 @@ unless (IS_WINDOWS() or $options{'foreground'})
     $| = 1;
 }
 
-# open log file
+# open log file and enable autoflush
+# http://perl.plover.com/FAQs/Buffering.html
 open($hlog, '>>', $options{'logfile'})
     or die "Failed to open log file ", $options{'logfile'}, "! $!\n";
+select((select($hlog), $|=1)[0]);
 #print $hlog "\n";
 
 # open syslog

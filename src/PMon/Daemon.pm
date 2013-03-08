@@ -136,7 +136,7 @@ sub on_signal
 
     if ($sig =~ /^(INT|TERM|QUIT)$/)
     {
-        warn "PMon Daemon caught $sig signal!\n";
+        warn "Caught $sig signal (pid $$)!\n";
         $self->_shutdown;
         $poe_kernel->sig_handled;
     }
