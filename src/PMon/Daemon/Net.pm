@@ -115,7 +115,7 @@ sub on_factory_success
     );
 
     $self->{'listeners'}{$wheel->ID} = {
-        label => $self->{'factories'}{'label'},
+        label => $self->{'factories'}{$factory_id}{'label'},
         wheel => $wheel,
     };
     delete $self->{'factories'}{$factory_id};
