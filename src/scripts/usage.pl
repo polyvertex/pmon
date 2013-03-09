@@ -136,11 +136,9 @@ sub proc_loadavg
     die "Unrecognized output format from $file!\n"
       unless @values == 6;
 
-    $info{'ps.loadavg1'} = $values[0];
-    $info{'ps.loadavg2'} = $values[1];
-    $info{'ps.loadavg3'} = $values[2];
-    $info{'ps.run'}      = $values[3];
-    $info{'ps.total'}    = $values[4];
+    $info{'cpu.loadavg1'} = $values[0];
+    $info{'cpu.loadavg2'} = $values[1];
+    $info{'cpu.loadavg3'} = $values[2];
 }
 
 sub proc_stat
@@ -195,6 +193,78 @@ sub proc_stat
     }
 }
 
+sub ps_stat
+{
+    my @ps = qx/ps --no-headers -A -o sid,pid,state,command/;
+    die "Failed to run ps command (code ", ($? >> 8), ")!"
+        unless ($? >> 8) == 0;
+
+    my %sids_ignored;
+    my %sids;
+    my $ignored = 0;
+    my $total = 0;
+    my $active = 0;
+
+    # the first pass is to get all the sids of the processes we want to ignore:
+    # * our own process
+    # * pmon agent processes (pmona)
+    # * ovh.com monitoring software (rtm)
+    for (my $pass = 0; $pass < 2; ++$pass)
+    {
+        foreach my $line (@ps)
+        {
+            next unless $line =~ /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/;
+            my ( $sid, $pid, $state, $cmd ) = ( +$1, +$2, $3, $4 );
+
+            if ($pass == 0)
+            {
+                # regex test cases:
+                # * GOOD: '/usr/bin/perl /usr/local/rtm/bin/rtm 24',
+                # * GOOD: '/usr/local/rtm/bin/rtm 24',
+                # * GOOD: '/home/var/pmon/bin/pmona.pl',
+                # * GOOD: 'perl /home/var/pmon/bin/pmona.pl',
+                # * FAIL: 'perl /home/var/pmon/bin/pmond.pl --config /home/var/pmon/etc/pmond.conf',
+                # * FAIL: '/home/var/pmon/bin/pmond.pl --config /home/var/pmon/etc/pmond.conf',
+                # * FAIL: '/usr/bin/perl -w /home/jc/t.pl',
+                $sids_ignored{$sid} = 1
+                    if $pid == $$
+                    or $cmd =~ /^((\S+)?perl\s+.*|\S+)(pmona(\.pl)?|rtm\s+)/;
+            }
+            elsif ($pass == 1)
+            {
+                # debug:
+                #chomp $line;
+                #if (exists $sids_ignored{$sid})
+                #{
+                #    print "--- $line\n";
+                #}
+                #else
+                #{
+                #    my $s = '   ';
+                #    $s = 'A  ' if index($state, 'R') >= $[;
+                #    print "$s $line\n";
+                #}
+
+                if (exists $sids_ignored{$sid})
+                {
+                    ++$ignored;
+                }
+                else
+                {
+                    $sids{$sid} = 1;
+                    ++$total;
+                    ++$active if index($state, 'R') >= $[;
+                }
+            }
+        }
+    }
+
+    $info{'ps.sessions'} = scalar(keys %sids); # number of sessions (minus the ignored ones)
+    $info{'ps.total'}    = $total;             # total number of processes (minus the ignored ones)
+    $info{'ps.active'}   = $active;            # number of active processes (minus the ignored ones)
+    $info{'ps.ignored'}  = $ignored;           # number of ignored processes
+}
+
 
 
 BEGIN { $ENV{'LC_ALL'} = 'POSIX'; }
@@ -203,6 +273,7 @@ hdd_temp;
 mem_usage;
 proc_loadavg;
 proc_stat;
+ps_stat;
 END
 {
     my $out = '';
