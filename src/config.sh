@@ -112,12 +112,11 @@ function svn_get()
 
     # export content of the svn repository
     echo "Fecthing SVN copy from $SVN_REPOSITORY_URL (rev $REVISION)..."
-    while [ -z "$SVNUSER" ]; do read -p "SVN username? " SVNUSER; done
+    #while [ -z "$SVNUSER" ]; do read -p "SVN username? " SVNUSER; done
+    #--username "$SVNUSER" --no-auth-cache \
     svn export \
         --force \
         --revision $REVISION \
-        --username "$SVNUSER" \
-        --no-auth-cache \
         "$SVN_REPOSITORY_URL" "$TMP_DIR/svnexport" > "$TMP_FILE"
     [ $? -eq 0 ] || die 1 "Failed to fetch SVN copy!"
     echo
