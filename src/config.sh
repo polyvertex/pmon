@@ -219,6 +219,7 @@ function do_install()
             local dir_hourly="$INSTALL_DIR/etc/scripts-hourly"
             local dir_minute="$INSTALL_DIR/etc/scripts-minute"
 
+            ln -s "$dir_avail/smart.pl" "$dir_hourly/"
             ln -s "$dir_avail/system.sh" "$dir_daily/"
             ln -s "$dir_avail/usage.pl" "$dir_minute/"
         fi
