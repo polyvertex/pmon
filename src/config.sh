@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Author:     Jean-Charles Lefebvre
 # Created On: 2013-02-27 10:14:17Z
@@ -8,6 +8,7 @@
 
 # configuration
 SVN_REPOSITORY_URL="https://svn.jcl.io/pmon/trunk/src/"
+PID_FILE="/tmp/pmon_install.pid"
 TMP_FILE="/tmp/pmon_install.tmp"
 TMP_DIR="/tmp/pmon_install_dir"
 
@@ -137,19 +138,36 @@ function svn_get()
 #-------------------------------------------------------------------------------
 function pre_install()
 {
-    [ -e "$INSTALL_DIR" -a -d "$INSTALL_DIR" -a -w "$INSTALL_DIR" ] || \
-        die 1 "Cannot find destination directory $INSTALL_DIR!"
+    # check destination directory
+    if [ ! -e "$INSTALL_DIR" ]; then
+        if [ -e "$(dirname "$INSTALL_DIR")" ]; then
+            echo "Creating destination directory: $INSTALL_DIR..."
+            mkdir "$INSTALL_DIR"
+        else
+            die 1 "Parent directory of $INSTALL_DIR does not exist! Please create it first."
+        fi
+    fi
+    [ -e "$INSTALL_DIR" ] || \
+        die 1 "Destination directory '$INSTALL_DIR' does not exist!"
 
-    # leave if we are inside a local copy of a repository
-    [ -d "$INSTALL_DIR/.svn" ] && \
+    # die if destination dir is a local copy of a repository
+    [ -d "$INSTALL_DIR/.svn" -o -d "$INSTALL_DIR/.git" ] && \
         die 1 "Cannot install over a local copy of an SVN repository!"
 
-    # backup user's files
-    [ -e "$INSTALL_DIR/etc" ] && mv "$INSTALL_DIR/etc" "$TMP_DIR/"
+    # some third-party commands will be used by the agent
+    # hope we won't fail to keep this list actualized...
+    if [ $INSTALL_AGENT -ne 0 ]; then
+        for cmd in cat df free grep hddtemp head ls ps smartctl uname; do
+            which $cmd &> /dev/null
+            [ $? -eq 0 ] || die 1 "Command '$cmd' not found! It is used by the Agent."
+        done
+    fi
 
-    # cleanup installation directory
-    rm -rf "$INSTALL_DIR/*" "$INSTALL_DIR/.*" || \
-        die 1 "Failed to cleanup $INSTALL_DIR!"
+    # shutdown daemon in case we want to reinstall it
+    if [ $INSTALL_DAEMON -ne 0 -a -e "$INSTALL_DIR/bin/pmond.sh" ]; then
+        # TODO
+        echo > /dev/null
+    fi
 }
 
 #-------------------------------------------------------------------------------
@@ -159,8 +177,17 @@ function do_install()
     local first_install_agent=1
     local tmp
 
+    # backup user's files
+    [ -e "$INSTALL_DIR/etc" ] && mv "$INSTALL_DIR/etc" "$TMP_DIR/"
+
+    # cleanup destination directory first
+    rm -rf "$INSTALL_DIR/*" "$INSTALL_DIR/.*" || \
+        die 1 "Failed to cleanup $INSTALL_DIR!"
+
+    # --- install ---
+
     # install config script
-    #mv -f "$TMP_DIR/svnexport/config.sh" "$INSTALL_DIR/"
+    mv -f "$TMP_DIR/svnexport/config.sh" "$INSTALL_DIR/"
 
     # install revision files
     mv -f "$TMP_DIR/svnexport/.revision" "$INSTALL_DIR/"
@@ -248,6 +275,7 @@ function do_install()
     [ $INSTALL_AGENT -ne 0 ] && touch "$INSTALL_DIR/var/.installed-agent"
     [ $INSTALL_DAEMON -ne 0 ] && touch "$INSTALL_DIR/var/.installed-daemon"
 
+    # adjust access rights
     chmod -R o-rwx "$INSTALL_DIR"
 }
 
@@ -262,14 +290,14 @@ REVISION="$3"
 [ -z "$INSTALL_DIR" ] && INSTALL_DIR="$THIS_SCRIPT_DIR"
 [ -z "$REVISION" ] && REVISION="HEAD"
 
-for cmd in which basename bash cat chmod chown cut date dirname head grep ln mv readlink rm stat svn tr; do
+for cmd in which basename bash cat chmod chown cut date dirname head grep ln mv readlink rm stat svn touch tr; do
     which $cmd &> /dev/null
     [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
 done
 
 #if [ -e "$THIS_SCRIPT_DIR/.devmode" ]; then
-    cleanup
-    svn_get
+#    cleanup
+#    svn_get
 #elif [ -z "$PMON_CONFIG_BOOSTRAPPED_FROM" ]; then
 #    cleanup
 #    svn_get
@@ -281,22 +309,25 @@ done
 #fi
 
 case "$ACTION" in
-    uninstall|clean)
-        uninstall
-        ;;
     install-all)
         INSTALL_AGENT=1
         INSTALL_DAEMON=1
+        cleanup
+        svn_get
         pre_install
         do_install
         ;;
     install-agent)
         INSTALL_AGENT=1
+        cleanup
+        svn_get
         pre_install
         do_install
         ;;
     install-daemon)
         INSTALL_DAEMON=1
+        cleanup
+        svn_get
         pre_install
         do_install
         ;;
