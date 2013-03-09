@@ -206,8 +206,8 @@ sub ps_stat
     my $active = 0;
 
     # the first pass is to get all the sids of the processes we want to ignore:
-    # * our own process
-    # * pmon agent processes (pmona)
+    # * our own session (i.e.: not only our own process!)
+    # * pmon agent (pmona)
     # * ovh.com monitoring software (rtm)
     for (my $pass = 0; $pass < 2; ++$pass)
     {
