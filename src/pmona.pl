@@ -155,6 +155,10 @@ sub drop_priv
 BEGIN { $| = 1; }
 END { unlink(PID_FILE) if $pidfile_installed and -e PID_FILE; }
 
+# check user id
+die "You must be root to run PMon Agent!\n"
+    unless $) != 0;
+
 # get system's uptime
 {
     open(my $fh, '<', '/proc/uptime')
