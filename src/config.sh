@@ -213,15 +213,15 @@ function do_install()
 
         # if it is the first time we install, create default links to the
         # scripts we want to run
-        if [ $first_install_agent -ne 0 ]; then
+        if [ 1 ]; then  #$first_install_agent -ne 0 ]; then
             local dir_avail="$INSTALL_DIR/etc/scripts-available"
             local dir_daily="$INSTALL_DIR/etc/scripts-daily"
             local dir_hourly="$INSTALL_DIR/etc/scripts-hourly"
             local dir_minute="$INSTALL_DIR/etc/scripts-minute"
 
-            ln -s "$dir_avail/smart.pl" "$dir_hourly/"
-            ln -s "$dir_avail/system.sh" "$dir_daily/"
-            ln -s "$dir_avail/usage.pl" "$dir_minute/"
+            ln -sf "$dir_avail/smart.pl" "$dir_hourly/"
+            ln -sf "$dir_avail/system.sh" "$dir_daily/"
+            ln -sf "$dir_avail/usage.pl" "$dir_minute/"
         fi
     fi
 
