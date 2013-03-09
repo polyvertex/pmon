@@ -135,8 +135,6 @@ sub commit_info
     my $return = 1;
 
     return unless defined $machine_id;
-    chomp $value;
-    return unless length($value) > 0;
 
     $unix = 0 if $unix < 1 or $unix > 0xffffffff;
     $key = substr($key, 0, MAX_VALUE_LENGTH)

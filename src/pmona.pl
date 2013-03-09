@@ -427,7 +427,7 @@ while (my @fds = $read_set->can_read)
         else
         {
             send_info $line
-                if $line =~ /^([\w\-\_\.]+)\s+(\S+.*)$/
+                if $line =~ /^([\w\-\_\.]+)\s+(\S+.*)$/;
         }
     }
 }

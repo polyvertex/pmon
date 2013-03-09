@@ -10,11 +10,42 @@ use strict;
 use warnings;
 
 my %info;
+my @hdd;
 
 
-sub CPU_STATS_STORAGE_FILE { '/tmp/pmon-cpustats.txt' }
+sub CPU_STATS_STORAGE_FILE () { '/tmp/pmon-cpustats.txt' }
 
-sub hdd_usage
+sub init_hdd_list
+{
+    open(my $fh, '</proc/partitions')
+        or die "Failed to open /proc/partitions! $!\n";
+    while (<$fh>)
+    {
+        chomp;
+        if (/^\s*(\d+)\s+(\d+)\s+(\d+)\s+([hs]d\D+)$/)
+        {
+            die "Could not find /dev/$4!" unless -e "/dev/$4";
+            push @hdd, $4;
+        }
+    }
+    close $fh;
+}
+
+sub hdd_temp
+{
+    foreach my $name (@hdd)
+    {
+        my $cmd = "hddtemp -uC -n /dev/$name 2> /dev/null";
+        my $res = qx/$cmd/;
+        die "Failed to run '$cmd' (code ", ($? >> 8), ")!"
+            unless ($? >> 8) == 0;
+        chomp $res;
+        $info{"hdd.$name.temp"} = $res # temperature in celsius
+            if $res =~ /^(\d+)$/;
+    }
+}
+
+sub mount_points
 {
     # bytes
     my @df   = qx/df -l/;
@@ -33,7 +64,7 @@ sub hdd_usage
             $usage =~ s/%//g;
 
             $info{"mnt.$name.point"} = $mount;
-            $info{"mnt.$name.usage"} = $usage;
+            $info{"mnt.$name.usage"} = $usage; # in percents
         }
     }
 
@@ -53,44 +84,7 @@ sub hdd_usage
             $usage =~ s/%//g;
             $usage = 0 unless $usage =~ /^\d+$/;
 
-            $info{"mnt.$name.usage_inodes"} = $usage;
-        }
-    }
-}
-
-sub hdd_temp
-{
-    my @parts;
-    my $name;
-    my $dev;
-    my $cmd;
-    my $res;
-
-    open(my $fh, '</proc/partitions')
-        or die "Failed to open /proc/partitions! $!\n";
-    @parts = <$fh>;
-    close $fh;
-
-    foreach (@parts)
-    {
-        chomp;
-        if (/^\s+(\d+)\s+(0)\s+(\d+)\s+(\S+)$/)
-        {
-            $name = $4;
-            $dev  = "/dev/$name";
-
-            die "Unrecognized device name '$name' from /proc/partitions!"
-                unless $name =~ /^[a-z]+$/;
-            die "Device $dev not found!"
-                unless -e $dev;
-
-            $cmd = "hddtemp -uC -n $dev 2> /dev/null";
-            $res = qx/$cmd/;
-            die "Failed to run '$cmd' (code ", ($? >> 8), ")!"
-                unless ($? >> 8) == 0;
-            chomp $res;
-            $info{"hdd.$name.temp"} = $res
-                if $res =~ /^(\d+)$/;
+            $info{"mnt.$name.usage_inodes"} = $usage; # in percents
         }
     }
 }
@@ -125,7 +119,7 @@ sub mem_usage
     }
 }
 
-sub proc_loadavg
+sub cpu_loadavg
 {
     # expected output format from /proc/loadavg:
     # avg1 avg2 avg3 running_threads/total_threads last_running_pid
@@ -141,7 +135,7 @@ sub proc_loadavg
     $info{'cpu.loadavg3'} = $values[2];
 }
 
-sub proc_stat
+sub cpu_usage
 {
     my $fh;
     my @stats;
@@ -268,11 +262,12 @@ sub ps_stat
 
 
 BEGIN { $ENV{'LC_ALL'} = 'POSIX'; }
-hdd_usage;
+init_hdd_list;
+cpu_loadavg;
+cpu_usage;
 hdd_temp;
+mount_points;
 mem_usage;
-proc_loadavg;
-proc_stat;
 ps_stat;
 END
 {
