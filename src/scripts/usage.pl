@@ -32,8 +32,8 @@ sub hdd_usage
             $name  =~ s%/%-%g;
             $usage =~ s/%//g;
 
-            $info{"hdd.$name.mount"} = $mount;
-            $info{"hdd.$name.usage"} = $usage;
+            $info{"mnt.$name.point"} = $mount;
+            $info{"mnt.$name.usage"} = $usage;
         }
     }
 
@@ -53,7 +53,44 @@ sub hdd_usage
             $usage =~ s/%//g;
             $usage = 0 unless $usage =~ /^\d+$/;
 
-            $info{"hdd.$name.usage_inodes"} = $usage;
+            $info{"mnt.$name.usage_inodes"} = $usage;
+        }
+    }
+}
+
+sub hdd_temp
+{
+    my @parts;
+    my $name;
+    my $dev;
+    my $cmd;
+    my $res;
+
+    open(my $fh, '</proc/partitions')
+        or die "Failed to open /proc/partitions! $!\n";
+    @parts = <$fh>;
+    close $fh;
+
+    foreach (@parts)
+    {
+        chomp;
+        if (/^\s+(\d+)\s+(0)\s+(\d+)\s+(\S+)$/)
+        {
+            $name = $4;
+            $dev  = "/dev/$name";
+
+            die "Unrecognized device name '$name' from /proc/partitions!"
+                unless $name =~ /^[a-z]+$/;
+            die "Device $dev not found!"
+                unless -e $dev;
+
+            $cmd = "hddtemp -uC -n $dev 2> /dev/null";
+            $res = qx/$cmd/;
+            die "Failed to run '$cmd' (code ", ($? >> 8), ")!"
+                unless ($? >> 8) == 0;
+            chomp $res;
+            $info{"hdd.$name.temp"} = $res
+                if $res =~ /^(\d+)$/;
         }
     }
 }
@@ -162,6 +199,7 @@ sub proc_stat
 
 BEGIN { $ENV{'LC_ALL'} = 'POSIX'; }
 hdd_usage;
+hdd_temp;
 mem_usage;
 proc_loadavg;
 proc_stat;
