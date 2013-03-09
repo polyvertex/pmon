@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Author:     Jean-Charles Lefebvre
 # Created On: 2013-02-23 15:41:21Z
