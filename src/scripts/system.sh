@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# Author:     Jean-Charles Lefebvre
+# Created On: 2013-02-26 17:57:13Z
+#
+# $Id$
+#
+
 LC_ALL=POSIX
 
 # os.kernel
