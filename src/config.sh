@@ -31,10 +31,11 @@ INSTALL_AGENT=0
 INSTALL_DAEMON=0
 
 # global variables
-FORKED=0
+INSTALL_STAGE=0
 TMP_DIR=""
-TMP_DIR_SVNCOPY=""
+TMP_DIR_INSTALLSRC=""
 TMP_FILE=""
+TMP=""
 
 
 #-------------------------------------------------------------------------------
@@ -61,7 +62,7 @@ function usage()
 function cleanup()
 {
     [ -n "$TMP_FILE" -a  -e "$TMP_FILE" ] && rm -f "$TMP_FILE"
-    [ -n "$TMP_DIR_SVNCOPY" -a  -e "$TMP_DIR_SVNCOPY" ] && rm -rf "$TMP_DIR_SVNCOPY"
+    [ -n "$TMP_DIR_INSTALLSRC" -a  -e "$TMP_DIR_INSTALLSRC" ] && rm -rf "$TMP_DIR_INSTALLSRC"
     [ -n "$TMP_DIR" -a  -e "$TMP_DIR" ] && rm -rf "$TMP_DIR"
 }
 
@@ -120,13 +121,13 @@ function init_vars()
     touch "$TMP_FILE" || die 1 "Failed to create temp file!"
     rm "$TMP_FILE"
 
-    TMP_DIR_SVNCOPY="$TMP_DIR/svncopy"
+    TMP_DIR_INSTALLSRC="$TMP_DIR/installsource"
 }
 
 #-------------------------------------------------------------------------------
-function svn_get()
+function fetch_install_content()
 {
-    [ -e "$TMP_DIR_SVNCOPY" ] || mkdir -p "$TMP_DIR_SVNCOPY"
+    [ -e "$TMP_DIR_INSTALLSRC" ] || mkdir -p "$TMP_DIR_INSTALLSRC"
 
     # export content of the svn repository
     echo "Fecthing SVN copy from $SVN_REPOSITORY_URL (rev $REVISION)..."
@@ -135,7 +136,7 @@ function svn_get()
     svn export \
         --force \
         --revision $REVISION \
-        "$SVN_REPOSITORY_URL" "$TMP_DIR_SVNCOPY" > "$TMP_FILE"
+        "$SVN_REPOSITORY_URL" "$TMP_DIR_INSTALLSRC" > "$TMP_FILE"
     [ $? -eq 0 ] || die 1 "Failed to fetch SVN copy!"
     echo
 
@@ -146,20 +147,20 @@ function svn_get()
     #echo "Downloaded revision $REVISION."
 
     # keep trace of the revision number
-    echo "$REVISION" > "$TMP_DIR_SVNCOPY/.revision"
-    date '+%Y-%m-%d %H:%M:%S' > "$TMP_DIR_SVNCOPY/.timestamp"
+    echo "$REVISION" > "$TMP_DIR_INSTALLSRC/.revision"
+    date '+%Y-%m-%d %H:%M:%S' > "$TMP_DIR_INSTALLSRC/.timestamp"
 
     # ensure the config script exists and is executable
-    local configscript="$TMP_DIR_SVNCOPY/config.sh"
+    local configscript="$TMP_DIR_INSTALLSRC/$THIS_SCRIPT_NAME"
     [ -e "$configscript" ] || die 1 "Updated install script does not exist \"$configscript\"!"
     chmod 0750 "$configscript"
     [ -x "$configscript" ] || die 1 "Updated install script is not executable \"$configscript\"!"
 }
 
 #-------------------------------------------------------------------------------
-function pre_install()
+function install_stage_1()
 {
-    # check destination directory
+    # check destination directory (first pass)
     if [ ! -e "$INSTALL_DIR" ]; then
         if [ -e "$(dirname "$INSTALL_DIR")" ]; then
             echo "Creating destination directory: $INSTALL_DIR..."
@@ -169,12 +170,33 @@ function pre_install()
             die 1 "Parent directory of $INSTALL_DIR does not exist! Please create it first."
         fi
     fi
-    [ -e "$INSTALL_DIR" ] || \
+
+    # check destination directory (second pass)
+    [ -e "$INSTALL_DIR" -a -w "$INSTALL_DIR" ] || \
         die 1 "Destination directory '$INSTALL_DIR' does not exist!"
 
     # die if destination dir is a local copy of a repository
     [ -d "$INSTALL_DIR/.svn" -o -d "$INSTALL_DIR/.git" ] && \
         die 1 "Cannot install over a local copy of an SVN repository!"
+
+    # copy this script into the install dir
+    cp -f "$THIS_SCRIPT" "$INSTALL_DIR/$THIS_SCRIPT_NAME"
+    chmod 0750 "$INSTALL_DIR/$THIS_SCRIPT_NAME"
+    [ -e "$INSTALL_DIR/$THIS_SCRIPT_NAME" -a -x "$INSTALL_DIR/$THIS_SCRIPT_NAME" ] || \
+        die 1 "$INSTALL_DIR/$THIS_SCRIPT_NAME does not exist or is not executable (stage $INSTALL_STAGE)!"
+}
+
+#-------------------------------------------------------------------------------
+function install_stage_2()
+{
+    local first_install_daemon=1
+    local first_install_agent=1
+    local tmp
+    local dir_scripts_avail="$INSTALL_DIR/etc/scripts-available"
+    local dir_scripts_daily="$INSTALL_DIR/etc/scripts-daily"
+    local dir_scripts_hourly="$INSTALL_DIR/etc/scripts-hourly"
+    local dir_scripts_minute="$INSTALL_DIR/etc/scripts-minute"
+
 
     # some third-party commands will be used by the agent
     # hope we won't fail to keep this list actualized...
@@ -190,22 +212,6 @@ function pre_install()
         echo "Try to stop daemon before upgrading it..."
         "$INSTALL_DIR/bin/pmond.sh" stop
     fi
-}
-
-#-------------------------------------------------------------------------------
-function do_install()
-{
-    local first_install_daemon=1
-    local first_install_agent=1
-    local tmp
-    local dir_scripts_avail="$INSTALL_DIR/etc/scripts-available"
-    local dir_scripts_daily="$INSTALL_DIR/etc/scripts-daily"
-    local dir_scripts_hourly="$INSTALL_DIR/etc/scripts-hourly"
-    local dir_scripts_minute="$INSTALL_DIR/etc/scripts-minute"
-
-    # can we overwrite install dir?
-    [ -d "$INSTALL_DIR" -a -w "$INSTALL_DIR" ] || \
-        die 1 "Cannot write into \"$INSTALL_DIR\"!"
 
     # first install?
     [ -e "$INSTALL_DIR/bin/pmond.pl" ] && first_install_daemon=0
@@ -217,14 +223,9 @@ function do_install()
     mv -f "$INSTALL_DIR/var/pmond.log" "$INSTALL_DIR/var/pmond.log.1" &> /dev/null
     rm -rf "$INSTALL_DIR/bin" &> /dev/null
 
-    # install config script
-    # CAUTION: do not move it! we may still need it afterwards!
-    cp -f "$TMP_DIR_SVNCOPY/config.sh" "$INSTALL_DIR/config.sh"
-    chmod 0750 "$INSTALL_DIR/config.sh"
-
     # install revision files
-    mv -f "$TMP_DIR_SVNCOPY/.revision" "$INSTALL_DIR/"
-    mv -f "$TMP_DIR_SVNCOPY/.timestamp" "$INSTALL_DIR/"
+    mv -f "$TMP_DIR_INSTALLSRC/.revision" "$INSTALL_DIR/"
+    mv -f "$TMP_DIR_INSTALLSRC/.timestamp" "$INSTALL_DIR/"
 
     # create directories structure
     [ -e "$INSTALL_DIR/bin" ] || mkdir -p "$INSTALL_DIR/bin"
@@ -245,7 +246,7 @@ function do_install()
     [ $INSTALL_DAEMON -ne 0 ] && tmp="$tmp pmond"
     if [ -n "$tmp" ]; then
         for name in $tmp; do
-            local srcfile="$TMP_DIR_SVNCOPY/$name.sample.conf"
+            local srcfile="$TMP_DIR_INSTALLSRC/$name.sample.conf"
             local destfile="$INSTALL_DIR/etc/$name.conf"
 
             if [ -e "$destfile" ]; then
@@ -259,7 +260,7 @@ function do_install()
 
     # install agent's scripts
     if [ $INSTALL_AGENT -ne 0 ]; then
-        for srcfile in $TMP_DIR_SVNCOPY/scripts/*; do
+        for srcfile in $TMP_DIR_INSTALLSRC/scripts/*; do
             local destfile="$dir_scripts_avail/$(basename "$srcfile")"
             mv -f "$srcfile" "$destfile"
             chmod 0750 "$destfile"
@@ -287,7 +288,7 @@ function do_install()
     # install agent's binary files
     if [ $INSTALL_AGENT -ne 0 ]; then
         for fname in pmona.pl; do
-            mv -f "$TMP_DIR_SVNCOPY/$fname" "$INSTALL_DIR/bin/"
+            mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/"
         done
         chmod 0750 "$INSTALL_DIR/bin/pmona.pl"
     fi
@@ -296,7 +297,7 @@ function do_install()
     if [ $INSTALL_DAEMON -ne 0 ]; then
         for fname in PMon pmond.pl pmond.sh; do
             [ -d "$INSTALL_DIR/bin/$fname" ] && rm -rf "$INSTALL_DIR/bin/$fname"
-            mv -f "$TMP_DIR_SVNCOPY/$fname" "$INSTALL_DIR/bin/"
+            mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/"
         done
         chmod 0750 "$INSTALL_DIR/bin/pmond.pl"
         chmod 0750 "$INSTALL_DIR/bin/pmond.sh"
@@ -328,27 +329,34 @@ done
 # if you modify this section, it is more likely that the user will have to
 # download and overwrite his own local copy of this script before being able
 # to install/upgrade whithout any trouble...
-if [ "$1" == "priv-install-forked" ]; then
-    FORKED=1
+if [ "$1" == "priv-install-stage1" ]; then
+    INSTALL_STAGE=1
     TMP_DIR="$2"
-    [ -d "$TMP_DIR" ] || die 1 "Given temp dir does not exists ($TMP_DIR)!"
+    TMP="$3" # the original calling script (we want to delete it)
+    rm -f "$TMP" &> /dev/null
+    [ -d "$TMP_DIR" ] || die 1 "Given temp dir does not exists (stage $INSTALL_STAGE; $TMP_DIR)!"
+    shift 3
+elif [ "$1" == "priv-install-stage2" ]; then
+    INSTALL_STAGE=2
+    TMP_DIR="$2"
+    [ -d "$TMP_DIR" ] || die 1 "Given temp dir does not exists (stage $INSTALL_STAGE; $TMP_DIR)!"
     shift 2
-elif [ "$1" == "priv-rm" ]; then
-    shift
-    while [ -n "$1" ]; do
-        [ -e "$1" ] && rm -rf "$1"
-        shift
-    done
-    exit 0
-elif [ "$1" == "priv-waitpid-and-rm" ]; then
-    pid="$2"
-    shift 2
-    while [ -e "/proc/$pid" ]; do sleep 1; done
-    while [ -n "$1" ]; do
-        [ -e "$1" ] && rm -rf "$1"
-        shift
-    done
-    exit 0
+#elif [ "$1" == "priv-rm" ]; then
+#    shift
+#    while [ -n "$1" ]; do
+#        [ -e "$1" ] && rm -rf "$1"
+#        shift
+#    done
+#    exit 0
+#elif [ "$1" == "priv-waitpid-and-rm" ]; then
+#    pid="$2"
+#    shift 2
+#    while [ -e "/proc/$pid" ]; do sleep 1; done
+#    while [ -n "$1" ]; do
+#        [ -e "$1" ] && rm -rf "$1"
+#        shift
+#    done
+#    exit 0
 fi
 
 
@@ -378,20 +386,30 @@ esac
 case "$ACTION" in
     install-all|install-agent|install-daemon)
         init_vars
-        if [ $FORKED -eq 0 ]; then
-            # first step: download fressh installable content to a temp dir,
-            # then fork to the (maybe) new version of THIS_SCRIPT located in the
-            # temp dir, passing all the parameters we've got from the user.
-            svn_get
-            exec "$TMP_DIR_SVNCOPY/config.sh" "priv-install-forked" "$TMP_DIR" "$@"
-        else
-            # second step: we are running from the temp dir and we are ready to
-            # install... after the install process, since we cannot delete
+        if [ $INSTALL_STAGE -eq 0 ]; then
+            # init stage: download fresh installable content to TMP_DIR, then
+            # fork to the (maybe) new version of THIS_SCRIPT located in the
+            # TMP_DIR, passing all the parameters we've got from the user.
+            fetch_install_content
+            exec "$TMP_DIR_INSTALLSRC/$THIS_SCRIPT_NAME" \
+                "priv-install-stage1" "$TMP_DIR" \
+                "$THIS_SCRIPT" "$ACTION" "$INSTALL_DIR" "$REVISION"
+        elif [ $INSTALL_STAGE -eq 1 ]; then
+            # first stage: THIS_SCRIPT is now running from TMP_DIR. our only
+            # goal here is to copy THIS_SCRIPT to the INSTALL_DIR and then
+            # run the installed script from the INSTALL_DIR in order to initiate
+            # the final stage.
+            # we continue to pass original parameters given by the user.
+            install_stage_1
+            exec "$INSTALL_DIR/$THIS_SCRIPT_NAME" \
+                "priv-install-stage2" "$TMP_DIR" \
+                "$ACTION" "$INSTALL_DIR" "$REVISION"
+        elif [ $INSTALL_STAGE -eq 2 ]; then
+            # second stage: we are running from the temp dir and we are ready
+            # to install... after the install process, since we cannot delete
             # THIS_SCRIPT (we are running it), we ask the installed version of
             # THIS_SCRIPT to do it.
-            pre_install
-            do_install
-            exec "$INSTALL_DIR/config.sh" "priv-rm" "$TMP_FILE" "$TMP_DIR_SVNCOPY" "$TMP_DIR"
+            install_stage_2
         fi
         ;;
     *)
