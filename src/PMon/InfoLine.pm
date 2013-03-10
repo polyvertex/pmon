@@ -31,6 +31,8 @@ sub new
     }, $class;
     my %args = @_;
 
+    $self->{'time'} = time;
+
     $self->{'addr_packed'} = $args{'addr_packed'}
         if exists $args{'addr_packed'};
     $self->{'is_received'} = 1
@@ -42,18 +44,16 @@ sub new
     {
         chomp $self->{'line'};
 
-        my ($magic, $machine, $time, $key, $value) =
-            split /\s+/, $self->{'line'}, 5;
+        my ($magic, $machine, $key, $value) =
+            split /\s+/, $self->{'line'}, 4;
 
         if (defined($value) and
             $magic eq 'pmon1' and
             $machine =~ /^[\w\-\_\.]+$/ and
-            $time =~ /^\d+$/ and
             $key =~ /^[\w\-\_\.]+$/)
         {
             $self->{'magic'}   = $magic;
             $self->{'machine'} = $machine;
-            $self->{'time'}    = $time;
             $self->{'key'}     = $key;
             $self->{'value'}   = $value;
         }

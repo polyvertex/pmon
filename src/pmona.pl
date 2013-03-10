@@ -122,7 +122,7 @@ sub send_info
         return;
     }
 
-    my $message = "pmon1 ".$config{'machine_uniq'}." $now $info\n";
+    my $message = "pmon1 ".$config{'machine_uniq'}." $info\n";
 
     if (length($message) >= MAX_UDP_BUFFER_LENGTH and !length($server_buffer))
     {
