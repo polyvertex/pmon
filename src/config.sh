@@ -77,6 +77,15 @@ function die()
 
     [ "$code" != "0" ] && msg="*** ERROR: $msg"
     echo "$msg"
+
+    if [ -n "$TMP_DIR" -a -e "$TMP_DIR" ]; then
+        echo
+        echo "Note: You will have to remove the temp dir manually ($TMP_DIR)."
+        echo "      Sorry for the inconvenience."
+        echo "      You can run the following command to do that:"
+        echo "      rm -rf \"$TMP_DIR\""
+    fi
+
     exit $code
 }
 
@@ -125,7 +134,7 @@ function init_vars()
 }
 
 #-------------------------------------------------------------------------------
-function fetch_install_content()
+function fetch_install_files()
 {
     [ -e "$TMP_DIR_INSTALLSRC" ] || mkdir -p "$TMP_DIR_INSTALLSRC"
 
@@ -390,7 +399,7 @@ case "$ACTION" in
             # init stage: download fresh installable content to TMP_DIR, then
             # fork to the (maybe) new version of THIS_SCRIPT located in the
             # TMP_DIR, passing all the parameters we've got from the user.
-            fetch_install_content
+            fetch_install_files
             exec "$TMP_DIR_INSTALLSRC/$THIS_SCRIPT_NAME" \
                 "priv-install-stage1" "$TMP_DIR" \
                 "$THIS_SCRIPT" "$ACTION" "$INSTALL_DIR" "$REVISION"
@@ -410,6 +419,7 @@ case "$ACTION" in
             # THIS_SCRIPT (we are running it), we ask the installed version of
             # THIS_SCRIPT to do it.
             install_stage_2
+            cleanup
         fi
         ;;
     *)
