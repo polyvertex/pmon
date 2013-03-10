@@ -31,6 +31,7 @@ INSTALL_AGENT=0
 INSTALL_DAEMON=0
 
 # global variables
+FORKED=0
 TMP_DIR=""
 TMP_DIR_SVNCOPY=""
 TMP_FILE=""
@@ -59,6 +60,8 @@ function usage()
 #-------------------------------------------------------------------------------
 function cleanup()
 {
+    [ -n "$TMP_FILE" -a  -e "$TMP_FILE" ] && rm -f "$TMP_FILE"
+    [ -n "$TMP_DIR_SVNCOPY" -a  -e "$TMP_DIR_SVNCOPY" ] && rm -rf "$TMP_DIR_SVNCOPY"
     [ -n "$TMP_DIR" -a  -e "$TMP_DIR" ] && rm -rf "$TMP_DIR"
 }
 
@@ -140,28 +143,18 @@ function svn_get()
     REVISION=$(grep '^Exported revision' "$TMP_FILE" | cut -d' ' -f3 | tr -d '.')
     #rm -f "$TMP_FILE"
     [ -z "$REVISION" ] && die 1 "Failed to get SVN revision number!"
-    echo "Exported revision $REVISION."
+    #echo "Downloaded revision $REVISION."
 
     # keep trace of the revision number
     echo "$REVISION" > "$TMP_DIR_SVNCOPY/.revision"
     date '+%Y-%m-%d %H:%M:%S' > "$TMP_DIR_SVNCOPY/.timestamp"
 
-    echo
+    # ensure the config script exists and is executable
+    local configscript="$TMP_DIR_SVNCOPY/config.sh"
+    [ -e "$configscript" ] || die 1 "Updated install script does not exist \"$configscript\"!"
+    chmod 0750 "$configscript"
+    [ -x "$configscript" ] || die 1 "Updated install script is not executable \"$configscript\"!"
 }
-
-#-------------------------------------------------------------------------------
-#function fork_install()
-#{
-#    local configscript="$TMP_DIR_SVNCOPY/config.sh"
-#
-#    [ -e "$configscript" ] || die 1 "Install script not found in \"$configscript\"!"
-#    [ -x "$configscript" ] || die 1 "Install script is not executable \"$configscript\"!"
-#    #touch "$FORKED_FILE"
-#    #[ -e "$FORKED_FILE" ] || die 1 "Could not create the 'forked' file at \"$FORKED_FILE\"!"
-#
-#    exec "$configscript" "$ACTION" "$INSTALL_DIR" "$REVISION"
-#    exit 0
-#}
 
 #-------------------------------------------------------------------------------
 function pre_install()
@@ -225,7 +218,9 @@ function do_install()
     rm -rf "$INSTALL_DIR/bin" &> /dev/null
 
     # install config script
-    #mv -f "$TMP_DIR_SVNCOPY/config.sh" "$INSTALL_DIR/"
+    # CAUTION: do not move it! we may still need it afterwards!
+    cp -f "$TMP_DIR_SVNCOPY/config.sh" "$INSTALL_DIR/config.sh"
+    chmod 0750 "$INSTALL_DIR/config.sh"
 
     # install revision files
     mv -f "$TMP_DIR_SVNCOPY/.revision" "$INSTALL_DIR/"
@@ -324,13 +319,39 @@ function do_install()
 
 
 #-------------------------------------------------------------------------------
-for cmd in which basename bash cat chmod chown cut date dirname head grep ln mktemp mv readlink rm stat svn touch tr; do
+for cmd in which basename bash cat chmod chown cp cut date dirname head grep ln mktemp mv readlink rm stat svn touch tr; do
     which $cmd &> /dev/null
     [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
 done
 
-# do not forget to modify the fork_install() function according to your
-# changes on global parameters here!
+# special running cases to perform minimalistic actions
+# if you modify this section, it is more likely that the user will have to
+# download and overwrite his own local copy of this script before being able
+# to install/upgrade whithout any trouble...
+if [ "$1" == "priv-install-forked" ]; then
+    FORKED=1
+    TMP_DIR="$2"
+    [ -d "$TMP_DIR" ] || die 1 "Given temp dir does not exists ($TMP_DIR)!"
+    shift 2
+elif [ "$1" == "priv-rm" ]; then
+    shift
+    while [ -n "$1" ]; do
+        [ -e "$1" ] && rm -rf "$1"
+        shift
+    done
+    exit 0
+elif [ "$1" == "priv-waitpid-and-rm" ]; then
+    pid="$2"
+    shift 2
+    while [ -e "/proc/$pid" ]; do sleep 1; done
+    while [ -n "$1" ]; do
+        [ -e "$1" ] && rm -rf "$1"
+        shift
+    done
+    exit 0
+fi
+
+
 ACTION="$1"
 INSTALL_DIR="$2"
 REVISION="$3"
@@ -343,29 +364,42 @@ case "$ACTION" in
     install-all)
         INSTALL_AGENT=1
         INSTALL_DAEMON=1
-        init_vars
-        svn_get
-        pre_install
-        do_install
         ;;
     install-agent)
         INSTALL_AGENT=1
-        init_vars
-        svn_get
-        pre_install
-        do_install
+        INSTALL_DAEMON=0
         ;;
     install-daemon)
+        INSTALL_AGENT=0
         INSTALL_DAEMON=1
+        ;;
+esac
+
+case "$ACTION" in
+    install-all|install-agent|install-daemon)
         init_vars
-        svn_get
-        pre_install
-        do_install
+        if [ $FORKED -eq 0 ]; then
+            # first step: download fressh installable content to a temp dir,
+            # then fork to the (maybe) new version of THIS_SCRIPT located in the
+            # temp dir, passing all the parameters we've got from the user.
+            svn_get
+            exec "$TMP_DIR_SVNCOPY/config.sh" "priv-install-forked" "$TMP_DIR" "$@"
+        else
+            # second step: we are running from the temp dir and we are ready to
+            # install... after the install process, since we cannot delete
+            # THIS_SCRIPT (we are running it), we ask the installed version of
+            # THIS_SCRIPT to do it.
+            pre_install
+            do_install
+            exec "$INSTALL_DIR/config.sh" "priv-rm" "$TMP_FILE" "$TMP_DIR_SVNCOPY" "$TMP_DIR"
+        fi
         ;;
     *)
         die 1 "Unknown action \"$ACTION\"!"
         ;;
 esac
 
-cleanup
+# do not cleanup() here!
+# it is up to each ACTION to decide if we must cleanup() or not.
+
 exit 0
