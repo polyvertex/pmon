@@ -163,7 +163,7 @@ sub get_int
         }
         elsif ($self->{'settings'}{$key} =~ /^[+-]?\d+$/)
         {
-            $value = +($self->{'settings'}{$key});
+            $value = int $self->{'settings'}{$key};
         }
         elsif ($self->{'strict'})
         {
