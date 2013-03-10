@@ -309,7 +309,10 @@ else # read text config file
     if (-e FRESH_INSTALL_FILE)
     {
         $force_all = 1;
-        unlink FRESH_INSTALL_FILE;
+        # do not remove the file if we are running from a terminal, that allows
+        # user to check everything is ok manually before configuring the cron.
+        unlink FRESH_INSTALL_FILE
+            unless -t STDOUT;
     }
 
     warn "All scripts forced.\n" if $force_all;
