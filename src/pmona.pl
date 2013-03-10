@@ -219,7 +219,6 @@ if (-e CONFIG_FILE and -e BINCONFIG_FILE)
     goto __read_txt_config unless defined($mod_txt) and defined($mod_bin);
     goto __read_txt_config if $mod_txt >= $mod_bin; # is txt file younger?
 
-    warn "Read binary config...\n";
     $ref_config = Storable::retrieve(BINCONFIG_FILE);
     unless (defined $ref_config)
     {
@@ -231,7 +230,6 @@ if (-e CONFIG_FILE and -e BINCONFIG_FILE)
 else # read text config file
 {
     __read_txt_config:
-    warn "Read text config...\n";
 
     # init config
     $ref_config = {
@@ -298,9 +296,6 @@ else # read text config file
     # create binary config file
     Storable::store($ref_config, BINCONFIG_FILE);
 }
-
-use Data::Dumper;
-warn Dumper($ref_config), "\n";
 
 # select the accepted frequencies
 {
