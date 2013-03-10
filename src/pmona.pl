@@ -10,6 +10,7 @@ use strict;
 use warnings;
 
 use Time::Local ();
+use Storable ();
 use Symbol qw(gensym);
 use POSIX qw(dup2);
 use Socket;
@@ -30,6 +31,7 @@ use constant
     REVISION_FILE      => $MY_DIR.'/../.revision',
     SCRIPTS_DIR        => $MY_DIR.'/../etc/scripts',
     CONFIG_FILE        => $MY_DIR.'/../etc/pmona.conf',
+    BINCONFIG_FILE     => $MY_DIR.'/../var/pmona.conf.bin',
     PID_FILE           => $MY_DIR.'/../var/pmona.pid',
     FRESH_INSTALL_FILE => $MY_DIR.'/../var/.installed-agent',
 
@@ -48,7 +50,7 @@ use constant
 };
 
 # global variables
-my %config;
+my $ref_config = { };
 my $now = time;
 my $revision = 0;
 my $tzoffset = Time::Local::timegm(localtime $now) - $now; # timezone offset in seconds
@@ -69,8 +71,8 @@ sub flush_info
         alarm SEND_TIMEOUT;
 
         my $proto = getprotobyname 'udp';
-        my $iaddr = gethostbyname $config{'server_host'};
-        my $sin   = sockaddr_in $config{'server_port'}, $iaddr;
+        my $iaddr = gethostbyname $ref_config->{'server_host'};
+        my $sin   = sockaddr_in $ref_config->{'server_port'}, $iaddr;
         my $sock;
 
         socket $sock, PF_INET, SOCK_DGRAM, $proto;
@@ -79,8 +81,8 @@ sub flush_info
 
         if ($sent != length $server_buffer)
         {
-            my $err = "Incomplete send() to ".$config{'server_host'}.":".
-                $config{'server_port'}." ($sent/".length($server_buffer).
+            my $err = "Incomplete send() to ".$ref_config->{'server_host'}.":".
+                $ref_config->{'server_port'}." ($sent/".length($server_buffer).
                 " bytes)!";
             push @errors, $err;
             warn $err, "\n";
@@ -113,7 +115,7 @@ sub send_info
         return;
     }
 
-    my $message = "pmon1 ".$config{'machine_uniq'}." $info\n";
+    my $message = "pmon1 ".$ref_config->{'machine_uniq'}." $info\n";
 
     if (length($message) >= MAX_UDP_BUFFER_LENGTH and !length($server_buffer))
     {
@@ -208,17 +210,39 @@ if (-e REVISION_FILE)
     }
 }
 
-# read configuration file and collect scripts to run
+# read configuration file
+if (-e CONFIG_FILE and -e BINCONFIG_FILE)
 {
+    my $mod_txt = (stat(CONFIG_FILE))[9];
+    my $mod_bin = (stat(BINCONFIG_FILE))[9];
+
+    goto __read_txt_config unless defined($mod_txt) and defined($mod_bin);
+    goto __read_txt_config if $mod_txt >= $mod_bin; # is txt file younger?
+
+    warn "Read binary config...\n";
+    $ref_config = Storable::retrieve(BINCONFIG_FILE);
+    unless (defined $ref_config)
+    {
+        warn "Failed to read binary config file ", BINCONFIG_FILE,
+            "! Switching back to ", CONFIG_FILE, "...\n";
+        goto __read_txt_config;
+    }
+}
+else # read text config file
+{
+    __read_txt_config:
+    warn "Read text config...\n";
+
     # init config
-    %config = (
-        machine_uniq => undef,
-        server_host  => undef,
-        server_port  => 7666,
-        busy_uptime  => 900,
-        daily_hour   => 2,
-        scripts      => { },
-    );
+    $ref_config = {
+        machine_uniq  => undef,
+        server_host   => undef,
+        server_port   => 7666,
+        busy_uptime   => 900,
+        daily_hour    => 2,
+        scripts_order => [ ], 
+        scripts       => { },
+    };
 
     # open config file
     my $oconf = PMon::Config->new(
@@ -229,28 +253,28 @@ if (-e REVISION_FILE)
         unless @{$oconf->sections_list} > 0;
 
     # machine name
-    $config{'machine_uniq'} = $oconf->get_str('machine_uniq');
+    $ref_config->{'machine_uniq'} = $oconf->get_str('machine_uniq');
     die "Setting 'machine_uniq' not found or have incorrect format in ", CONFIG_FILE, "!\n"
-        unless defined($config{'machine_uniq'})
-        and $config{'machine_uniq'} =~ /^[\w\-\_\.]+$/;
+        unless defined($ref_config->{'machine_uniq'})
+        and $ref_config->{'machine_uniq'} =~ /^[\w\-\_\.]+$/;
 
     # server host
-    $config{'server_host'} = $oconf->get_str('server_host');
+    $ref_config->{'server_host'} = $oconf->get_str('server_host');
     die "Setting 'server_host' not found or have incorrect format in ", CONFIG_FILE, "!\n"
-        unless defined($config{'server_host'})
-        and $config{'server_host'} =~ /^[0-9A-Za-z\.\-_]+$/;
+        unless defined($ref_config->{'server_host'})
+        and $ref_config->{'server_host'} =~ /^[0-9A-Za-z\.\-_]+$/;
 
     # server port
-    $config{'server_port'} = $oconf->get_int(
-        'server_port', $config{'server_port'}, 1, 65535);
+    $ref_config->{'server_port'} = $oconf->get_int(
+        'server_port', $ref_config->{'server_port'}, 1, 65535);
 
     # busy uptime
-    $config{'busy_uptime'} = $oconf->get_int(
-        'busy_uptime', $config{'busy_uptime'}, 60, 3600);
+    $ref_config->{'busy_uptime'} = $oconf->get_int(
+        'busy_uptime', $ref_config->{'busy_uptime'}, 60, 3600);
 
     # daily hour
-    $config{'daily_hour'} = $oconf->get_int(
-        'daily_hour', $config{'daily_hour'}, 0, 23);
+    $ref_config->{'daily_hour'} = $oconf->get_int(
+        'daily_hour', $ref_config->{'daily_hour'}, 0, 23);
 
     # collect all enabled scripts
     foreach my $script_name (@{$oconf->sections_list})
@@ -264,12 +288,19 @@ if (-e REVISION_FILE)
 
         my $args = $oconf->get_str("$script_name/args", '');
 
-        $config{'scripts'}{$script_name} = {
+        push @{$ref_config->{'scripts_order'}}, $script_name;
+        $ref_config->{'scripts'}{$script_name} = {
             freq => uc $freq,
             args => $args,
         };
     }
+
+    # create binary config file
+    Storable::store($ref_config, BINCONFIG_FILE);
 }
+
+use Data::Dumper;
+warn Dumper($ref_config), "\n";
 
 # select the accepted frequencies
 {
@@ -292,11 +323,11 @@ if (-e REVISION_FILE)
     $accepted_freq{'M'} = 1;
     $accepted_freq{'H'} = 1
         if $force_all
-        or $uptime < $config{'busy_uptime'}
+        or $uptime < $ref_config->{'busy_uptime'}
         or ($now_min >= 0 and $now_min <= 5);
     $accepted_freq{'D'} = 1
         if $force_all
-        or ( ($now_hour == $config{'daily_hour'} or $uptime < $config{'busy_uptime'})
+        or ( ($now_hour == $ref_config->{'daily_hour'} or $uptime < $ref_config->{'busy_uptime'})
         and $now_min % 10 == 0 );
 }
 
@@ -307,9 +338,10 @@ send_info "sys.uptime $uptime";
 
 # launch scripts in separate processes
 my $read_set = IO::Select->new();
-while (my ($script_name, $ref_script) = each %{$config{'scripts'}})
+foreach my $script_name (@{$ref_config->{'scripts_order'}})
 {
     my $script = SCRIPTS_DIR."/$script_name";
+    my $ref_script = $ref_config->{'scripts'}{$script_name};
 
     die "Script $script_name is enabled in config file but not found in ", SCRIPTS_DIR, "!\n"
         unless -e SCRIPTS_DIR."/$script_name";

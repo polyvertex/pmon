@@ -221,6 +221,10 @@ function install_stage_2()
         echo
     fi
 
+    # delete agent's binary config file
+    [ $INSTALL_AGENT -ne 0 -a -e "$INSTALL_DIR/var/pmona.conf.bin" ] && \
+        rm -f "$INSTALL_DIR/var/pmona.conf.bin"
+
     # shutdown daemon in case we want to reinstall it
     if [ $INSTALL_DAEMON -ne 0 -a -e "$INSTALL_DIR/bin/pmond.sh" ]; then
         echo "Try to stop daemon before upgrading it..."
