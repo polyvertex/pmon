@@ -28,7 +28,7 @@ use constant
 {
     # paths
     REVISION_FILE      => $MY_DIR.'/../.revision',
-    SCRIPTS_DIR_BASE   => $MY_DIR.'/../etc/scripts-',
+    SCRIPTS_DIR        => $MY_DIR.'/../etc/scripts',
     CONFIG_FILE        => $MY_DIR.'/../etc/pmona.conf',
     PID_FILE           => $MY_DIR.'/../var/pmona.pid',
     FRESH_INSTALL_FILE => $MY_DIR.'/../var/.installed-agent',
@@ -55,19 +55,10 @@ my $tzoffset = Time::Local::timegm(localtime $now) - $now; # timezone offset in 
 my $uptime;
 my $pidfile_installed;
 my $server_buffer = '';
+my %accepted_freq;
 my @errors;
-my @scripts;
 my %children;
 
-
-#-------------------------------------------------------------------------------
-sub script_label
-{
-    my $path = shift;
-    return defined($2) ? "$2/$3" : $3
-        if $path =~ m%(([^/]+)/+)?([^/]+)$%;
-    return $path;
-}
 
 #-------------------------------------------------------------------------------
 sub flush_info
@@ -217,70 +208,71 @@ if (-e REVISION_FILE)
     }
 }
 
-# read configuration file
+# read configuration file and collect scripts to run
 {
-    # setup accepted values
+    # init config
     %config = (
         machine_uniq => undef,
         server_host  => undef,
         server_port  => 7666,
         busy_uptime  => 900,
         daily_hour   => 2,
-        #cmd_ls       => '/bin/ls',
+        scripts      => { },
     );
 
-    # read file
-    open(my $fh, '<', CONFIG_FILE)
-        or die "Failed to open ", CONFIG_FILE, "! $!\n";
-    while (<$fh>)
-    {
-        chomp; s/^\s+//; s/^#.*//; s/\s+$//;
-        next unless length; # skip comment and empty lines
-        die "Wrong key-value pair format in ", CONFIG_FILE, " at line $.!"
-            unless /^(\w+)\s*=\s*(.*)$/;
-        die "Unknown value name '$1' in ", CONFIG_FILE, " at line $.!"
-            unless exists $config{$1};
-        $config{$1} = $2 // '';
-    }
-    close $fh;
+    # open config file
+    my $oconf = PMon::Config->new(
+        file   => CONFIG_FILE,
+        strict => 1,
+    );
+    die "No configured scripts found in ", CONFIG_FILE, "!\n"
+        unless @{$oconf->sections_list} > 0;
 
-    # check machine name
+    # machine name
+    $config{'machine_uniq'} = $oconf->get_str('machine_uniq');
     die "Setting 'machine_uniq' not found or have incorrect format in ", CONFIG_FILE, "!\n"
         unless defined($config{'machine_uniq'})
         and $config{'machine_uniq'} =~ /^[\w\-\_\.]+$/;
 
     # server host
+    $config{'server_host'} = $oconf->get_str('server_host');
     die "Setting 'server_host' not found or have incorrect format in ", CONFIG_FILE, "!\n"
         unless defined($config{'server_host'})
         and $config{'server_host'} =~ /^[0-9A-Za-z\.\-_]+$/;
 
     # server port
-    die "Incorrect value of 'server_port' in ", CONFIG_FILE, "!\n"
-        unless $config{'server_port'} =~ /^\d+$/
-        and $config{'server_port'} >= 1
-        and $config{'server_port'} <= 65535;
+    $config{'server_port'} = $oconf->get_int(
+        'server_port', $config{'server_port'}, 1, 65535);
 
     # busy uptime
-    die "Incorrect value of 'busy_uptime' in ", CONFIG_FILE, "!\n"
-        unless $config{'busy_uptime'} =~ /^\d+$/
-        and $config{'busy_uptime'} >= 60
-        and $config{'busy_uptime'} <= 3600;
+    $config{'busy_uptime'} = $oconf->get_int(
+        'busy_uptime', $config{'busy_uptime'}, 60, 3600);
 
     # daily hour
-    die "Incorrect value of 'daily_hour' in ", CONFIG_FILE, "!\n"
-        unless $config{'daily_hour'} =~ /^\d+$/
-        and $config{'daily_hour'} >= 0
-        and $config{'daily_hour'} <= 23;
+    $config{'daily_hour'} = $oconf->get_int(
+        'daily_hour', $config{'daily_hour'}, 0, 23);
 
-    # ls command
-    $config{'cmd_ls'} = '/bin/ls';
-    $config{'cmd_ls'} = 'ls' unless -x $config{'cmd_ls'};
+    # collect all enabled scripts
+    foreach my $script_name (@{$oconf->sections_list})
+    {
+        next unless $oconf->get_bool("$script_name/enabled");
+
+        my $freq = $oconf->get_str("$script_name/freq");
+        die "Frequency not defined (correctly) for script $script_name in ", CONFIG_FILE, "!\n"
+            unless defined($freq)
+            and $freq =~ /^[MHD]$/i;
+
+        my $args = $oconf->get_str("$script_name/args", '');
+
+        $config{'scripts'}{$script_name} = {
+            freq => uc $freq,
+            args => $args,
+        };
+    }
 }
 
-# collect scripts to run
+# select the accepted frequencies
 {
-    my @groups = qw( minute );
-    my @collected_scripts;
     my @anow      = localtime $now;
     my $now_hour  = $anow[2];
     my $now_min   = $anow[1];
@@ -296,27 +288,16 @@ if (-e REVISION_FILE)
 
     warn "All scripts forced.\n" if $force_all;
 
-    # select scripts to run
-    push(@groups, 'hourly')
+    # select accepted frequencies
+    $accepted_freq{'M'} = 1;
+    $accepted_freq{'H'} = 1
         if $force_all
         or $uptime < $config{'busy_uptime'}
         or ($now_min >= 0 and $now_min <= 5);
-    push(@groups, 'daily')
+    $accepted_freq{'D'} = 1
         if $force_all
         or ( ($now_hour == $config{'daily_hour'} or $uptime < $config{'busy_uptime'})
         and $now_min % 10 == 0 );
-
-    # collect scripts
-    my $ls = $config{'cmd_ls'}.' -1';
-    foreach my $group (@groups)
-    {
-        my $d = SCRIPTS_DIR_BASE."$group";
-        my @fnames = qx/$ls "$d"/;
-        die "Failed to collect scripts from $d!\n"
-            unless ($? >> 8) == 0;
-        chomp @fnames;
-        push @scripts, map { "$d/$_" } @fnames;
-    }
 }
 
 # send info we've got
@@ -326,8 +307,14 @@ send_info "sys.uptime $uptime";
 
 # launch scripts in separate processes
 my $read_set = IO::Select->new();
-foreach my $script (@scripts)
+while (my ($script_name, $ref_script) = each %{$config{'scripts'}})
 {
+    my $script = SCRIPTS_DIR."/$script_name";
+
+    die "Script $script_name is enabled in config file but not found in ", SCRIPTS_DIR, "!\n"
+        unless -e SCRIPTS_DIR."/$script_name";
+    next unless exists $accepted_freq{$ref_script->{'freq'}};
+
     my @stats = stat $script;
     my $uid = $stats[4];
 
@@ -360,7 +347,7 @@ foreach my $script (@scripts)
         my $res = eval {
             local $SIG{'ALRM'} = sub { $err = 'Timeout!'; die; };
             alarm CHILDREN_TIMEOUT;
-            system $script;
+            system "$script ".$ref_script->{'args'};
             if ($? == -1)
             {
                 $err = "system() failed! $!";
@@ -373,7 +360,7 @@ foreach my $script (@scripts)
             $code = 1 unless defined $code;
             $err  = 'Unknown error!' unless defined $err;
             chomp $err;
-            die script_label($script), ': ', $err, "\n";
+            die "$script_name: $err\n";
         }
         exit $code;
     }
@@ -383,7 +370,7 @@ foreach my $script (@scripts)
     $read_set->add($p_stdout_read);
     $read_set->add($p_stderr_read);
     $children{$child_pid} = {
-        script => $script,
+        name   => $script_name,
         stdout => $p_stdout_read,
         stderr => $p_stderr_read,
         errout => [ ],
@@ -437,13 +424,12 @@ while (1)
 {
     my $pid = waitpid -1, 0;
     last unless $pid > 0;
-    $children{$pid}->{'status'} = $? >> 8;
-    if ($children{$pid}->{'status'} != 0)
+    $children{$pid}{'status'} = $? >> 8;
+    if ($children{$pid}{'status'} != 0)
     {
-        my $label = script_label $children{$pid}{'script'};
         my $err = join ' ', map { chomp; $_ } @{$children{$pid}{'errout'}};
         chomp $err;
-        $err = "$label: $err";
+        $err = $children{$pid}{'name'}.": $err";
         push @errors, $err;
         warn $err, "\n";
     }
