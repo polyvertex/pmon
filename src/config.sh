@@ -136,6 +136,8 @@ function init_vars()
 #-------------------------------------------------------------------------------
 function fetch_install_files()
 {
+    local configscript="$1"
+
     [ -e "$TMP_DIR_INSTALLSRC" ] || mkdir -p "$TMP_DIR_INSTALLSRC"
 
     # export content of the svn repository
@@ -160,7 +162,6 @@ function fetch_install_files()
     date '+%Y-%m-%d %H:%M:%S' > "$TMP_DIR_INSTALLSRC/.timestamp"
 
     # ensure the config script exists and is executable
-    local configscript="$TMP_DIR_INSTALLSRC/$THIS_SCRIPT_NAME"
     [ -e "$configscript" ] || die 1 "Updated install script does not exist \"$configscript\"!"
     chmod 0750 "$configscript"
     [ -x "$configscript" ] || die 1 "Updated install script is not executable \"$configscript\"!"
@@ -172,7 +173,7 @@ function install_stage_1()
     # check destination directory (first pass)
     if [ ! -e "$INSTALL_DIR" ]; then
         if [ -e "$(dirname "$INSTALL_DIR")" ]; then
-            echo "Creating destination directory: $INSTALL_DIR..."
+            echo "Creating destination directory: $INSTALL_DIR"
             mkdir "$INSTALL_DIR"
         else
             # safer not to use 'mkdir -p' here...
@@ -319,10 +320,14 @@ function install_stage_2()
     # adjust access rights
     chmod -R o-rwx "$INSTALL_DIR"
 
-    echo
     echo "Installation done."
-    echo "Please do not forget to check your configuration files located in:"
-    echo "$INSTALL_DIR/etc"
+    echo "Please do not forget to check your configuration files:"
+    [ $INSTALL_DAEMON -ne 0 ] && echo "  $INSTALL_DIR/etc/pmona.conf"
+    if [ $INSTALL_AGENT -ne 0 ]; then
+        echo "  $INSTALL_DIR/etc/pmond.conf"
+        echo "You can also add the following line in root's crontab if it is not already done:"
+        echo "  \*/1 \* \* \* \* $INSTALL_DIR/bin/pmona.pl > /dev/null"
+    fi
     echo
 }
 
@@ -399,8 +404,8 @@ case "$ACTION" in
             # init stage: download fresh installable content to TMP_DIR, then
             # fork to the (maybe) new version of THIS_SCRIPT located in the
             # TMP_DIR, passing all the parameters we've got from the user.
-            fetch_install_files
-            exec "$TMP_DIR_INSTALLSRC/$THIS_SCRIPT_NAME" \
+            fetch_install_files "$TMP_DIR_INSTALLSRC/config.sh" # safer to hard-code the name of the script here!
+            exec "$TMP_DIR_INSTALLSRC/config.sh" \              # safer to hard-code the name of the script here!
                 "priv-install-stage1" "$TMP_DIR" \
                 "$THIS_SCRIPT" "$ACTION" "$INSTALL_DIR" "$REVISION"
         elif [ $INSTALL_STAGE -eq 1 ]; then
