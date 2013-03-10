@@ -202,10 +202,6 @@ function install_stage_2()
     local first_install_daemon=1
     local first_install_agent=1
     local tmp
-    local dir_scripts_avail="$INSTALL_DIR/etc/scripts-available"
-    local dir_scripts_daily="$INSTALL_DIR/etc/scripts-daily"
-    local dir_scripts_hourly="$INSTALL_DIR/etc/scripts-hourly"
-    local dir_scripts_minute="$INSTALL_DIR/etc/scripts-minute"
 
 
     # some third-party commands will be used by the agent
@@ -246,16 +242,12 @@ function install_stage_2()
     mv -f "$TMP_DIR_INSTALLSRC/.timestamp" "$INSTALL_DIR/"
 
     # create directories structure
-    [ -e "$INSTALL_DIR/bin" ] || mkdir -p "$INSTALL_DIR/bin"
-    [ -e "$INSTALL_DIR/etc" ] || mkdir -p "$INSTALL_DIR/etc"
-    [ -e "$INSTALL_DIR/var" ] || mkdir -p "$INSTALL_DIR/var"
+    [ -e "$INSTALL_DIR/bin" ] || mkdir "$INSTALL_DIR/bin"
     [ -e "$INSTALL_DIR/bin" ] || die 1 "Failed to create main directories structure in $INSTALL_DIR!"
+    [ -e "$INSTALL_DIR/etc" ] || mkdir "$INSTALL_DIR/etc"
+    [ -e "$INSTALL_DIR/var" ] || mkdir "$INSTALL_DIR/var"
     if [ $INSTALL_AGENT -ne 0 ]; then
-        [ -e "$dir_scripts_avail" ] || mkdir "$dir_scripts_avail"
-        [ -e "$dir_scripts_daily" ] || mkdir "$dir_scripts_daily"
-        [ -e "$dir_scripts_hourly" ] || mkdir "$dir_scripts_hourly"
-        [ -e "$dir_scripts_minute" ] || mkdir "$dir_scripts_minute"
-        [ -e "$dir_scripts_minute" ] || die 1 "Failed to create directories in $INSTALL_DIR/etc!"
+        [ -e "$INSTALL_DIR/etc/scripts" ] || mkdir "$INSTALL_DIR/etc/scripts"
     fi
 
     # install config files
@@ -279,28 +271,10 @@ function install_stage_2()
     # install agent's scripts
     if [ $INSTALL_AGENT -ne 0 ]; then
         for srcfile in $TMP_DIR_INSTALLSRC/scripts/*; do
-            local destfile="$dir_scripts_avail/$(basename "$srcfile")"
+            local destfile="$INSTALL_DIR/etc/scripts/$(basename "$srcfile")"
             mv -f "$srcfile" "$destfile"
             chmod 0750 "$destfile"
         done
-
-        pushd "$dir_scripts_daily" > /dev/null || die 1 "Failed to cd to \"$dir_scripts_daily\"!"
-        for name in system.sh; do
-            ln -sf "../scripts-available/$name" "$name"
-        done
-        popd > /dev/null
-
-        pushd "$dir_scripts_hourly" > /dev/null || die 1 "Failed to cd to \"$dir_scripts_hourly\"!"
-        for name in smart.pl; do
-            ln -sf "../scripts-available/$name" "$name"
-        done
-        popd > /dev/null
-
-        pushd "$dir_scripts_minute" > /dev/null || die 1 "Failed to cd to \"$dir_scripts_minute\"!"
-        for name in usage.pl; do
-            ln -sf "../scripts-available/$name" "$name"
-        done
-        popd > /dev/null
     fi
 
     # install agent's binary files
@@ -309,6 +283,11 @@ function install_stage_2()
             mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/"
         done
         chmod 0750 "$INSTALL_DIR/bin/pmona.pl"
+
+        # embed the Config module into the main script
+        echo >> "$INSTALL_DIR/bin/pmona.pl"
+        cat "$TMP_DIR_INSTALLSRC/PMon/Config.pm" >> "$INSTALL_DIR/bin/pmona.pl"
+        [ $? -eq 0 ] || die 1 "Failed to embed Config module into pmona.pl!"
     fi
 
     # install daemon's binary files
@@ -349,7 +328,7 @@ function install_stage_2()
 
 
 #-------------------------------------------------------------------------------
-for cmd in which basename bash cat chmod chown cp cut date dirname head grep ln mktemp mv readlink rm stat svn touch tr; do
+for cmd in which basename bash cat chmod chown cp cut date dirname head grep mktemp mv readlink rm stat svn touch tr; do
     which $cmd &> /dev/null
     [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
 done

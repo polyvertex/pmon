@@ -34,6 +34,7 @@ sub new
         $args{'subst'} :
         { };
 
+    $self->{'sections'} = [ ];
     $self->{'settings'} = { };
 
     $self->load if defined $self->{'file'};
@@ -66,7 +67,9 @@ sub load
 {
     my ($self, $opt_file) = @_;
     my $fh;
+    my $section;
 
+    $self->{'sections'} = { };
     $self->{'settings'} = { };
 
     die "Configuration file path not specified!"
@@ -81,15 +84,49 @@ sub load
         chomp; s/^\s+//; s/^#.*//; s/\s+$//;
         next unless length; # skip comment and empty lines
 
-        die "Wrong key-value pair format in ", $self->{'file'}, " at line $.!\n"
-            unless /^(\w+)\s*=\s*(.*)$/;
-        #die "Unknown value name '$1' in ", $self->{'file'}, " at line $.!\n"
-        #    unless exists $self->{'accepted'}{$1};
+        if (/^\[([\w\-\_\.]+)\](\s*#.*)?$/) # starting a new section?
+        {
+            $section = $1;
+            die "Section $section in ", $self->{'file'},
+                " at line $. is already defined at line ",
+                $self->{'sections'}{$section}{line}, "!\n"
+                if exists $self->{'sections'}{$section};
+            $self->{'sections'}{$section} = { line => $. };
+        }
+        else
+        {
+            die "Unrecognized format in ", $self->{'file'}, " at line $.!\n"
+                unless /^(\w+)\s*=\s*(.*)$/;
+            #die "Unknown value name '$1' in ", $self->{'file'}, " at line $.!\n"
+            #    unless exists $self->{'accepted'}{$1};
 
-        $self->{'settings'}{$1} = $2 // '';
+            my $key = defined($section) ? "$section/$1" : $1;
+            $self->{'settings'}{$key} = $2 // '';
+        }
     }
 
     close $fh;
+}
+
+#-------------------------------------------------------------------------------
+sub has_section
+{
+    my ($self, $section) = @_;
+    return exists $self->{'sections'}{$section};
+}
+
+#-------------------------------------------------------------------------------
+sub sections_list
+{
+    my @sections = keys shift()->{'sections'};
+    return \@sections;
+}
+
+#-------------------------------------------------------------------------------
+sub has_key
+{
+    my ($self, $key) = @_;
+    return exists $self->{'settings'}{$key};
 }
 
 #-------------------------------------------------------------------------------
