@@ -321,14 +321,17 @@ function install_stage_2()
     chmod -R o-rwx "$INSTALL_DIR"
 
     echo "Installation done."
-    echo "Please do not forget to check your configuration files:"
-    [ $INSTALL_DAEMON -ne 0 ] && echo "  $INSTALL_DIR/etc/pmona.conf"
-    if [ $INSTALL_AGENT -ne 0 ]; then
-        echo "  $INSTALL_DIR/etc/pmond.conf"
-        echo "You can also add the following line in root's crontab if it is not already done. It will lanuch the PMon Agent every minutes:"
-        echo "  */1 * * * * $INSTALL_DIR/bin/pmona.pl > /dev/null"
-    fi
     echo
+    if [ $INSTALL_DAEMON -ne 0 -o $INSTALL_AGENT -ne 0 ]; then
+        echo "Please do not forget to check your configuration files:"
+        [ $INSTALL_DAEMON -ne 0 ] && echo "  $INSTALL_DIR/etc/pmona.conf"
+        if [ $INSTALL_AGENT -ne 0 ]; then
+            echo "  $INSTALL_DIR/etc/pmond.conf"
+            echo "You can also add the following line in root's crontab if it is not already done. It will lanuch the PMon Agent every minutes:"
+            echo "  */1 * * * * $INSTALL_DIR/bin/pmona.pl > /dev/null"
+        fi
+        echo
+    fi
 }
 
 
@@ -345,7 +348,7 @@ done
 # to install/upgrade whithout any trouble...
 if [ "$1" == "priv-install-stage1" ]; then
     INSTALL_STAGE=1
-    echo "Entering stage $INSTALL_STAGE ($THIS_SCRIPT)..."
+    echo "Entered stage $INSTALL_STAGE ($THIS_SCRIPT)..."
     TMP_DIR="$2"
     TMP="$3" # the original calling script (we want to delete it)
     rm -f "$TMP" &> /dev/null
@@ -353,7 +356,7 @@ if [ "$1" == "priv-install-stage1" ]; then
     shift 3
 elif [ "$1" == "priv-install-stage2" ]; then
     INSTALL_STAGE=2
-    echo "Entering stage $INSTALL_STAGE ($THIS_SCRIPT)..."
+    echo "Entered stage $INSTALL_STAGE ($THIS_SCRIPT)..."
     TMP_DIR="$2"
     [ -d "$TMP_DIR" ] || die 1 "Given temp dir does not exists (stage $INSTALL_STAGE; $TMP_DIR)!"
     shift 2
