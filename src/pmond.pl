@@ -178,7 +178,11 @@ unless (IS_WINDOWS)
     require Sys::Syslog;
     Sys::Syslog::closelog();
 }
-close $hlog if defined $hlog;
+if (defined $hlog)
+{
+    print $hlog "\n";
+    close $hlog;
+}
 unlink $options{'pidfile'}
     if defined($options{'pidfile'}) and -e $options{'pidfile'};
 
