@@ -155,7 +155,7 @@ function fetch_install_files()
     REVISION=$(grep '^Exported revision' "$TMP_FILE" | cut -d' ' -f3 | tr -d '.')
     #rm -f "$TMP_FILE"
     [ -z "$REVISION" ] && die 1 "Failed to get SVN revision number!"
-    #echo "Downloaded revision $REVISION."
+    echo "Downloaded revision $REVISION."
 
     # keep trace of the revision number
     echo "$REVISION" > "$TMP_DIR_INSTALLSRC/.revision"
@@ -325,8 +325,8 @@ function install_stage_2()
     [ $INSTALL_DAEMON -ne 0 ] && echo "  $INSTALL_DIR/etc/pmona.conf"
     if [ $INSTALL_AGENT -ne 0 ]; then
         echo "  $INSTALL_DIR/etc/pmond.conf"
-        echo "You can also add the following line in root's crontab if it is not already done:"
-        echo "  \*/1 \* \* \* \* $INSTALL_DIR/bin/pmona.pl > /dev/null"
+        echo "You can also add the following line in root's crontab if it is not already done. It will lanuch the PMon Agent every minutes:"
+        echo "  */1 * * * * $INSTALL_DIR/bin/pmona.pl > /dev/null"
     fi
     echo
 }
