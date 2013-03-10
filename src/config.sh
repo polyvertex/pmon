@@ -172,6 +172,7 @@ function pre_install()
             echo "Creating destination directory: $INSTALL_DIR..."
             mkdir "$INSTALL_DIR"
         else
+            # safer not to use 'mkdir -p' here...
             die 1 "Parent directory of $INSTALL_DIR does not exist! Please create it first."
         fi
     fi
@@ -193,8 +194,8 @@ function pre_install()
 
     # shutdown daemon in case we want to reinstall it
     if [ $INSTALL_DAEMON -ne 0 -a -e "$INSTALL_DIR/bin/pmond.sh" ]; then
-        # TODO
-        echo > /dev/null
+        echo "Try to stop daemon before upgrading it..."
+        "$INSTALL_DIR/bin/pmond.sh" stop
     fi
 }
 
@@ -312,6 +313,12 @@ function do_install()
 
     # adjust access rights
     chmod -R o-rwx "$INSTALL_DIR"
+
+    echo
+    echo "Installation done."
+    echo "Please do not forget to check your configuration files located in:"
+    echo "$INSTALL_DIR/etc"
+    echo
 }
 
 
