@@ -35,7 +35,7 @@ INSTALL_STAGE=0
 TMP_DIR=""
 TMP_DIR_INSTALLSRC=""
 TMP_FILE=""
-TMP=""
+TMP="" # no special purpose, a unique swap variable used thorough this script
 
 
 #-------------------------------------------------------------------------------
@@ -215,6 +215,14 @@ function install_stage_2()
             which $cmd &> /dev/null
             [ $? -eq 0 ] || die 1 "Command '$cmd' not found! It is used by the Agent."
         done
+    fi
+
+    # wait for agent to finish before we go further
+    if [ $INSTALL_AGENT -ne 0 -a -e "$INSTALL_DIR/var/pmona.pid" ]; then
+        tmp=$(< "$INSTALL_DIR/var/pmona.pid")
+        echo -n "Waiting for running agent to finish before continuing (pid $tmp)..."
+        while [ -e "/proc/$tmp" ]; do echo -n "." && sleep 1; done
+        echo
     fi
 
     # shutdown daemon in case we want to reinstall it
