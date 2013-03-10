@@ -336,6 +336,7 @@ function install_stage_2()
             echo "* Check daemon's config: $INSTALL_DIR/etc/pmond.conf"
             echo "* Launch daemon: $INSTALL_DIR/bin/pmond.sh start"
             echo "* Ensure daemon will be launched after reboot (depends on your distro)"
+        fi
         if [ $INSTALL_AGENT -ne 0 ]; then
             echo "* Check agent's config: $INSTALL_DIR/etc/pmona.conf"
             echo "* Configure root's cron to frequently run the agent (every minutes here):"
