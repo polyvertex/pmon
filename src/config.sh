@@ -46,7 +46,7 @@ function usage()
     echo "* $THIS_SCRIPT_NAME install-all [install_dir] [revision]"
     echo "  To install or update the PMon Daemon (server) and the PMon Agent"
     echo "  altogether in the specified directory or, by default, in the same"
-    echo "  directory than this scripts."
+    echo "  directory than this script."
     echo ""
     echo "* $THIS_SCRIPT_NAME install-agent [install_dir] [revision]"
     echo "  To install or update the PMon Agent in the specified directory or,"
@@ -323,6 +323,7 @@ function install_stage_2()
         "$INSTALL_DIR/bin/pmond.sh" start
     fi
 
+    echo
     echo "Installation done."
     echo
     if [ $INSTALL_DAEMON -ne 0 -o $INSTALL_AGENT -ne 0 ]; then
