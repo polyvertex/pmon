@@ -428,13 +428,14 @@ while (my @fds = $read_set->can_read)
             next;
         }
         my $line = <$fd>;
-        if (!$line)
+        unless (defined $line)
         {
             $read_set->remove($fd);
             close $fd;
             next;
         }
         chomp $line;
+        next unless length($line) > 0;
         if ($fd == $slot->{'stderr'})
         {
             push @{$slot->{'errout'}}, $line;
