@@ -439,7 +439,7 @@ while (my @fds = $read_set->can_read)
         if ($fd == $slot->{'stderr'})
         {
             push @{$slot->{'errout'}}, $line;
-            #warn $line, "\n";
+            warn $line, "\n" if -t STDERR;
         }
         else
         {
