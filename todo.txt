@@ -1,4 +1,7 @@
 
+SELECT `key`, COUNT(`key`) AS cnt FROM `logatom` GROUP BY `key` ORDER BY cnt DESC, `key` ASC
+
+
 * séparation client / serveur (i.e.: agent / daemon)
   * client :
     * récupération puis envoi minimal des données
