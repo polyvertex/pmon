@@ -77,7 +77,6 @@ sub flush_info
 
         socket $sock, PF_INET, SOCK_DGRAM, $proto;
         my $sent = send $sock, $server_buffer, 0, $sin;
-        print $server_buffer;
 
         if ($sent != length $server_buffer)
         {
@@ -443,6 +442,7 @@ while (my @fds = $read_set->can_read)
         }
         else
         {
+            print $line, "\n" if -t STDOUT;
             send_info $line
                 if $line =~ /^([\w\-\_\.]+)\s+(\S+.*)$/;
         }
