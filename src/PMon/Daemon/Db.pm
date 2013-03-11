@@ -114,7 +114,8 @@ sub commit_uptime
     unless ($res > 0)
     {
         warn "Failed to update machine uptime (", $sth->err, ")! ", $sth->errstr, "\n";
-        if ($sth->err == MYSQLERR_SERVER_GONE_ERROR)
+        if ($self->{'dbh'}{'Driver'}{'Name'} eq 'mysql' and
+            $sth->err == MYSQLERR_SERVER_GONE_ERROR)
         {
             warn "Reconnecting to database...\n";
             $poe_kernel->yield('db_disconnect', 0);
@@ -210,7 +211,9 @@ sub commit_info
         warn $@;
         $self->{'dbh'}->rollback
             or warn "Failed to rollback transaction after errors (", $self->{'dbh'}->err, ")! ", $self->{'dbh'}->errstr, "\n";
-        if (defined($err) and $err == MYSQLERR_SERVER_GONE_ERROR)
+        if (defined($err) and 
+            $self->{'dbh'}{'Driver'}{'Name'} eq 'mysql' and
+            $err == MYSQLERR_SERVER_GONE_ERROR)
         {
             warn "Reconnecting to database...\n";
             $poe_kernel->yield('db_disconnect', 0);
