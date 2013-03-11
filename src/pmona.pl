@@ -212,11 +212,14 @@ if (-e REVISION_FILE)
 # read configuration file
 if (-e CONFIG_FILE and -e BINCONFIG_FILE)
 {
-    my $mod_txt = (stat(CONFIG_FILE))[9];
-    my $mod_bin = (stat(BINCONFIG_FILE))[9];
+    my $mod_self = (stat(__FILE__))[9];
+    my $mod_txt  = (stat(CONFIG_FILE))[9];
+    my $mod_bin  = (stat(BINCONFIG_FILE))[9];
 
-    goto __read_txt_config unless defined($mod_txt) and defined($mod_bin);
-    goto __read_txt_config if $mod_txt >= $mod_bin; # is txt file younger?
+    goto __read_txt_config
+        unless defined($mod_self) and defined($mod_txt) and defined($mod_bin)
+        and $mod_bin > $mod_txt   # txt config file has been modified?
+        and $mod_bin > $mod_self; # agent has been upgraded?
 
     $ref_config = Storable::retrieve(BINCONFIG_FILE);
     unless (defined $ref_config)
