@@ -201,6 +201,7 @@ function install_stage_2()
 {
     local first_install_daemon=1
     local first_install_agent=1
+    local restart_daemon=0
     local tmp
 
 
@@ -226,9 +227,13 @@ function install_stage_2()
         rm -f "$INSTALL_DIR/var/pmona.conf.bin"
 
     # shutdown daemon in case we want to reinstall it
-    if [ $INSTALL_DAEMON -ne 0 -a -e "$INSTALL_DIR/bin/pmond.sh" ]; then
-        echo "Try to stop daemon before upgrading it..."
-        "$INSTALL_DIR/bin/pmond.sh" stop
+    if [ $INSTALL_DAEMON -ne 0 -a -e "$INSTALL_DIR/bin/pmond.sh" -a -e "$INSTALL_DIR/var/pmond.pid" ]; then
+        tmp=$(< "$INSTALL_DIR/var/pmond.pid")
+        if [ -e "/proc/$tmp" ]; then
+            restart_daemon=1
+            echo "Try to stop daemon before upgrading it (pid $tmp)..."
+            "$INSTALL_DIR/bin/pmond.sh" stop
+        fi
     fi
 
     # first install?
@@ -312,19 +317,28 @@ function install_stage_2()
     # adjust access rights
     chmod -R o-rwx "$INSTALL_DIR"
 
+    # try to restart daemon if needed
+    if [ $restart_daemon -ne 0 ]; then
+        echo "Try to restart daemon..."
+        "$INSTALL_DIR/bin/pmond.sh" start
+    fi
+
     echo "Installation done."
     echo
     if [ $INSTALL_DAEMON -ne 0 -o $INSTALL_AGENT -ne 0 ]; then
         echo "You will have to perform the following steps manually to finish your installation:"
         if [ $INSTALL_DAEMON -ne 0 ]; then
-            echo "* Check daemon's config: $INSTALL_DIR/etc/pmond.conf"
-            echo "* Launch daemon: $INSTALL_DIR/bin/pmond.sh start"
+            echo "* Check daemon's config:"
+            echo "    $INSTALL_DIR/etc/pmond.conf"
+            echo "* Launch daemon if not done already:"
+            echo "    $INSTALL_DIR/bin/pmond.sh start"
             echo "* Ensure daemon will be launched after reboot (depends on your distro)"
         fi
         if [ $INSTALL_AGENT -ne 0 ]; then
-            echo "* Check agent's config: $INSTALL_DIR/etc/pmona.conf"
+            echo "* Check agent's config:"
+            echo "    $INSTALL_DIR/etc/pmona.conf"
             echo "* Configure root's cron to frequently run the agent (every minutes here):"
-            echo "  */1 * * * * $INSTALL_DIR/bin/pmona.pl > /dev/null"
+            echo "    */1 * * * * $INSTALL_DIR/bin/pmona.pl > /dev/null"
         fi
         echo
     fi
