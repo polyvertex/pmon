@@ -239,7 +239,8 @@ function install_stage_2()
     rm -f "$INSTALL_DIR/etc/*.dist" &> /dev/null
     rm -f "$INSTALL_DIR/var/*.pid" &> /dev/null
     mv -f "$INSTALL_DIR/var/pmond.log" "$INSTALL_DIR/var/pmond.log.1" &> /dev/null
-    rm -rf "$INSTALL_DIR/bin" &> /dev/null
+    [ $INSTALL_AGENT -ne 0 -a $INSTALL_DAEMON -ne 0 ] && \
+        rm -rf "$INSTALL_DIR/bin" &> /dev/null
 
     # install revision files
     mv -f "$TMP_DIR_INSTALLSRC/.revision" "$INSTALL_DIR/"
