@@ -105,12 +105,12 @@ function die()
 #    [ "$tmpa" != "$tmpb" ] && return 1
 #
 #    # check content byte-per-byte
-#    which cmp &> /dev/null
+#    type cmp &> /dev/null
 #    if [ $? -eq 0 ]; then
 #        cmp --quiet "$a" "$b"
 #        return $?
 #    else
-#        which md5sum &> /dev/null
+#        type md5sum &> /dev/null
 #        [ $? -eq 0 ] || die 1 "Could not find a way to compare files on a byte-per-byte basis. Please install either 'cmp' or 'md5sum' command!"
 #        tmpa=$(md5sum "$a" | cut -d' ' -f1)
 #        tmpb=$(md5sum "$b" | cut -d' ' -f1)
@@ -209,7 +209,7 @@ function install_stage_2()
     # hope we won't fail to keep this list actualized...
     if [ $INSTALL_AGENT -ne 0 ]; then
         for cmd in cat df free grep hddtemp head ls ps smartctl uname; do
-            which $cmd &> /dev/null
+            type $cmd &> /dev/null
             [ $? -eq 0 ] || die 1 "Command '$cmd' not found! It is used by the Agent."
         done
     fi
@@ -354,8 +354,8 @@ function install_stage_2()
 
 
 #-------------------------------------------------------------------------------
-for cmd in which basename bash cat chmod chown cp cut date dirname head grep ln mktemp mv readlink rm stat svn touch tr; do
-    which $cmd &> /dev/null
+for cmd in basename bash cat chmod chown cp cut date dirname head grep ln mktemp mv readlink rm stat svn touch tr; do
+    type $cmd &> /dev/null
     [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
 done
 
