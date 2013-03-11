@@ -198,7 +198,7 @@ sub ps_stat
     my $total = 0;
     my $active = 0;
 
-    my @debug;
+    #my @debug;
 
     # the first pass is to get all the sids of the processes we want to ignore:
     # * our own session (i.e.: not only our own process!)
@@ -228,17 +228,17 @@ sub ps_stat
             elsif ($pass == 1)
             {
                 # debug:
-                chomp $line;
-                if (exists $sids_ignored{$sid})
-                {
-                    push @debug, "--- $line\n";
-                }
-                else
-                {
-                    my $s = '   ';
-                    $s = 'A  ' if index($state, 'R') >= $[;
-                    push @debug, "$s $line\n";
-                }
+                #chomp $line;
+                #if (exists $sids_ignored{$sid})
+                #{
+                #    push @debug, "--- $line\n";
+                #}
+                #else
+                #{
+                #    my $s = '   ';
+                #    $s = 'A  ' if index($state, 'R') >= $[;
+                #    push @debug, "$s $line\n";
+                #}
 
                 if (exists $sids_ignored{$sid})
                 {
@@ -254,18 +254,18 @@ sub ps_stat
         }
     }
 
-    warn # debug
-        join('', @debug), "\n",
-        "Sessions: ", scalar(keys %sids), "\n",
-        "Total:    $total\n",
-        "Active:   $active\n",
-        "Ignored:  $ignored\n",
-        "\n";
+    #warn # debug
+    #    join('', @debug), "\n",
+    #    "Sessions: ", scalar(keys %sids), "\n",
+    #    "Total:    $total\n",
+    #    "Active:   $active\n",
+    #    "Ignored:  $ignored\n",
+    #    "\n";
 
     $info{'ps.sessions'} = scalar(keys %sids); # number of sessions (minus the ignored ones)
     $info{'ps.total'}    = $total;             # total number of processes (minus the ignored ones)
     $info{'ps.active'}   = $active;            # number of active processes (minus the ignored ones)
-    $info{'ps.ignored'}  = $ignored;           # number of ignored processes
+    #$info{'ps.ignored'}  = $ignored;           # number of ignored processes
 }
 
 
