@@ -11,9 +11,8 @@ use warnings;
 
 my %info;
 my @hdd;
+my $cpu_stats_file = (@ARGV > 0) ? $ARGV[0] : '/tmp/pmona-cpustats.txt';
 
-
-sub CPU_STATS_STORAGE_FILE () { '/tmp/pmon-cpustats.txt' }
 
 sub init_hdd_list
 {
@@ -64,7 +63,7 @@ sub mount_points
             $usage =~ s/%//g;
 
             $info{"mnt.$name.point"} = $mount;
-            $info{"mnt.$name.usage"} = $usage; # in percents
+            $info{"mnt.$name.usage"} = $usage; # percents
         }
     }
 
@@ -84,14 +83,14 @@ sub mount_points
             $usage =~ s/%//g;
             $usage = 0 unless $usage =~ /^\d+$/;
 
-            $info{"mnt.$name.usage_inodes"} = $usage; # in percents
+            $info{"mnt.$name.usage_inodes"} = $usage; # percents
         }
     }
 }
 
 sub mem_usage
 {
-    my @free = qx/free/;
+    my @free = qx/free -k/; # -k (kilobytes) is supposed to be the default, but who knows...
     my $code = $? >> 8;
     die "Failed to run 'free' command (code $code)!"
       unless $code == 0;
@@ -100,39 +99,23 @@ sub mem_usage
     {
         if (/^Swap:\s+(\d+)\s+(\d+)\s+(\d+)/i)
         {
-            $info{'swap.total'}   = $1;
-            $info{'swap.used'}    = $2;
-            $info{'swap.used_pr'} =
-                ($1 == 0) ? 0 : sprintf('%d', $2 / $1 * 100);
+            #$info{'swap.total'} = $1; # KB
+            #$info{'swap.used'}  = $2; # KB
+            $info{'swap.usage'} =
+                ($1 == 0) ? 0 : sprintf('%d', $2 / $1 * 100); # percents
         }
         elsif (/^Mem:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/i)
         {
-            $info{'mem.total'}   = $1;
-            $info{'mem.used'}    = $2;
-            $info{'mem.free'}    = $3;
-            $info{'mem.shared'}  = $4;
-            $info{'mem.buffers'} = $5;
-            $info{'mem.cached'}  = $6;
-            $info{'mem.used_pr'} =
-                sprintf('%d', ($2 - $5 - $6) / $1 * 100);
+            #$info{'mem.total'}   = $1; # KB
+            #$info{'mem.used'}    = $2; # KB
+            #$info{'mem.free'}    = $3; # KB
+            #$info{'mem.shared'}  = $4; # KB
+            #$info{'mem.buffers'} = $5; # KB
+            #$info{'mem.cached'}  = $6; # KB
+            $info{'mem.usage'} =
+                sprintf('%d', ($2 - $5 - $6) / $1 * 100); # percents
         }
     }
-}
-
-sub cpu_loadavg
-{
-    # expected output format from /proc/loadavg:
-    # avg1 avg2 avg3 running_threads/total_threads last_running_pid
-    my $file = '/proc/loadavg';
-    open(my $fh, '<', $file) or die "Failed to open $file! $!\n";
-    chomp(my @values = split(/[\s\/]+/, <$fh>));
-    close $fh;
-    die "Unrecognized output format from $file!\n"
-      unless @values == 6;
-
-    $info{'cpu.loadavg1'} = $values[0];
-    $info{'cpu.loadavg2'} = $values[1];
-    $info{'cpu.loadavg3'} = $values[2];
 }
 
 sub cpu_usage
@@ -155,17 +138,17 @@ sub cpu_usage
     }
 
     # first-time run?
-    unless (-e CPU_STATS_STORAGE_FILE)
+    unless (-e $cpu_stats_file)
     {
-        open($fh, '>', CPU_STATS_STORAGE_FILE)
-          or die "Failed to create ", CPU_STATS_STORAGE_FILE, "! $!\n";
+        open($fh, '>', $cpu_stats_file)
+          or die "Failed to create $cpu_stats_file! $!\n";
         print $fh @stats;
         close $fh;
     }
     else
     {
-        open($fh, '+<', CPU_STATS_STORAGE_FILE)
-            or die "Failed to open ", CPU_STATS_STORAGE_FILE, "! $!\n";
+        open($fh, '+<', $cpu_stats_file)
+            or die "Failed to open $cpu_stats_file! $!\n";
         while (<$fh>)
         {
             @cpu_usage1 = ( $1, $2, $3, $4 )
@@ -183,8 +166,24 @@ sub cpu_usage
             sprintf('%d', 100 - (($cpu_usage2[3] - $cpu_usage1[3]) / $delta * 100)) :
             0;
 
-        $info{'cpu.usage'} = $cpu_usage;
+        $info{'cpu.usage'} = $cpu_usage; # percent
     }
+}
+
+sub ps_loadavg
+{
+    # expected output format from /proc/loadavg:
+    # avg1 avg2 avg3 running_threads/total_threads last_running_pid
+    my $file = '/proc/loadavg';
+    open(my $fh, '<', $file) or die "Failed to open $file! $!\n";
+    chomp(my @values = split(/[\s\/]+/, <$fh>));
+    close $fh;
+    die "Unrecognized output format from $file!\n"
+      unless @values >= 6;
+
+    $info{'ps.loadavg1'} = $values[0];
+    $info{'ps.loadavg2'} = $values[1];
+    $info{'ps.loadavg3'} = $values[2];
 }
 
 sub ps_stat
@@ -198,6 +197,8 @@ sub ps_stat
     my $ignored = 0;
     my $total = 0;
     my $active = 0;
+
+    my @debug;
 
     # the first pass is to get all the sids of the processes we want to ignore:
     # * our own session (i.e.: not only our own process!)
@@ -227,17 +228,17 @@ sub ps_stat
             elsif ($pass == 1)
             {
                 # debug:
-                #chomp $line;
-                #if (exists $sids_ignored{$sid})
-                #{
-                #    print "--- $line\n";
-                #}
-                #else
-                #{
-                #    my $s = '   ';
-                #    $s = 'A  ' if index($state, 'R') >= $[;
-                #    print "$s $line\n";
-                #}
+                chomp $line;
+                if (exists $sids_ignored{$sid})
+                {
+                    push @debug, "--- $line\n";
+                }
+                else
+                {
+                    my $s = '   ';
+                    $s = 'A  ' if index($state, 'R') >= $[;
+                    push @debug, "$s $line\n";
+                }
 
                 if (exists $sids_ignored{$sid})
                 {
@@ -253,6 +254,14 @@ sub ps_stat
         }
     }
 
+    warn # debug
+        join('', @debug), "\n",
+        "Sessions: ", scalar(keys %sids), "\n",
+        "Total:    $total\n",
+        "Active:   $active\n",
+        "Ignored:  $ignored\n",
+        "\n";
+
     $info{'ps.sessions'} = scalar(keys %sids); # number of sessions (minus the ignored ones)
     $info{'ps.total'}    = $total;             # total number of processes (minus the ignored ones)
     $info{'ps.active'}   = $active;            # number of active processes (minus the ignored ones)
@@ -263,11 +272,11 @@ sub ps_stat
 
 BEGIN { $ENV{'LC_ALL'} = 'POSIX'; }
 init_hdd_list;
-cpu_loadavg;
 cpu_usage;
 hdd_temp;
 mount_points;
 mem_usage;
+ps_loadavg;
 ps_stat;
 END
 {
