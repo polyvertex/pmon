@@ -314,7 +314,7 @@ else # read text config file
             unless -t STDOUT;
     }
 
-    warn "All scripts forced.\n" if $force_all;
+    warn "All scripts forced.\n" if $force_all and -t SDTERR;
 
     # select accepted frequencies
     $accepted_freq{'M'} = 1;
