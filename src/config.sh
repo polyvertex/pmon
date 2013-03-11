@@ -443,7 +443,7 @@ case "$ACTION" in
                 "priv-install-stage2" "$TMP_DIR" \
                 "$ACTION" "$INSTALL_DIR" "$REVISION"
         elif [ $INSTALL_STAGE -eq 2 ]; then
-            # second stage: we are running from the temp dir and we are ready
+            # second stage: we are running from the install dir and we are ready
             # to install... after the install process, since we cannot delete
             # THIS_SCRIPT (we are running it), we ask the installed version of
             # THIS_SCRIPT to do it.
