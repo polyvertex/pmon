@@ -310,6 +310,12 @@ function install_stage_2()
         chmod 0750 "$INSTALL_DIR/bin/pmond.sh"
     fi
 
+    # daemon: try to create the /etc/init.d symlink
+    if [ $INSTALL_DAEMON -ne 0 -a -d "/etc/init.d" ]; then
+        echo "Creating /etc/init.d/pmond symlink..."
+        ln -sf "$INSTALL_DIR/bin/pmond.sh" "/etc/init.d/pmond"
+    fi
+
     # touch flag files to notify daemon/agent that this is a fresh install
     [ $INSTALL_AGENT -ne 0 ] && touch "$INSTALL_DIR/var/.installed-agent"
     [ $INSTALL_DAEMON -ne 0 ] && touch "$INSTALL_DIR/var/.installed-daemon"
@@ -348,7 +354,7 @@ function install_stage_2()
 
 
 #-------------------------------------------------------------------------------
-for cmd in which basename bash cat chmod chown cp cut date dirname head grep mktemp mv readlink rm stat svn touch tr; do
+for cmd in which basename bash cat chmod chown cp cut date dirname head grep ln mktemp mv readlink rm stat svn touch tr; do
     which $cmd &> /dev/null
     [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
 done
@@ -415,6 +421,8 @@ esac
 
 case "$ACTION" in
     install-all|install-agent|install-daemon)
+        tmp=$(readlink -f "$INSTALL_DIR")
+        [ "$tmp" == "/" ] && die 1 "You want to install into '/'?! Sure..."
         init_vars
         if [ $INSTALL_STAGE -eq 0 ]; then
             # init stage: download fresh installable content to TMP_DIR, then
