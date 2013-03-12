@@ -1,23 +1,33 @@
 
-* Daemon::Db: Store a cache of last sent values instead of SELETing the logatom
-  table each time. BUT populate the cache ONLY after successful insert/update!
-  How to limit the size of this cache?
-
 
 #-------------------------------------------------------------------------------
 # Useful SQL requests
 #-------------------------------------------------------------------------------
-# see what values flood the database
-SELECT `key`, COUNT(`key`) AS cnt
-FROM logatom
-GROUP BY `key`
-ORDER BY cnt DESC, `key` ASC;
+# see returned status from agents
+SELECT la.machine_id, m.name AS machine_name, la.unix_first, la.unix_last, la.value AS status
+FROM logatom AS la, machine AS m
+WHERE la.key='agent.status'
+AND m.id = la.machine_id
+ORDER BY la.machine_id ASC, la.id ASC;
+
+# see which keys flood the database
+SELECT la.key, COUNT(la.key) AS cnt
+FROM logatom AS la
+GROUP BY la.key
+ORDER BY cnt DESC, la.key ASC;
 
 # see the total duration of the database in seconds and in days
 SELECT
     (MAX(la.unix_last) - MIN(la.unix_first)) AS seconds,
     ((MAX(la.unix_last) - MIN(la.unix_first)) / 86400) AS days
-FROM pmon.logatom AS la;
+FROM logatom AS la;
+
+# count the number of different known keys for each machine
+# this allows us to setup the Daemon::Db::MAX_KEYS_CACHED constant properly
+SELECT la.machine_id, COUNT(DISTINCT la.key) AS distinct_keys
+FROM logatom AS la
+GROUP BY la.machine_id
+ORDER BY la.machine_id ASC;
 
 
 #-------------------------------------------------------------------------------
