@@ -133,8 +133,8 @@ sub cpu_usage
     {
         @cpu_usage2 = ( $1, $2, $3, $4 )
             if /^cpu\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/i;
-        #$info{'sys.boottime'} = $1
-        #    if /^btime\s+(\d+)/i;
+        $info{'sys.boottime'} = $1
+            if /^btime\s+(\d+)/i;
     }
 
     # first-time run?
