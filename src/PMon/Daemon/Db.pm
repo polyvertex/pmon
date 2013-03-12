@@ -136,6 +136,9 @@ sub commit_info
     my ($self, $machine_name, $unix, $key, $value) = @_;
     my $machine_id = $self->_machine_id($machine_name);
     my $err;
+    my $cache_key;
+    my $cache_rowid;
+    my $cache_value;
     my $return = 1;
 
     return unless defined $machine_id;
@@ -146,11 +149,12 @@ sub commit_info
     $value = substr($value, 0, MAX_VALUE_LENGTH)
         if length($value) > MAX_VALUE_LENGTH;
 
-    my $cache_key = "$machine_id/$key";
-    my $cache_value =
-        exists($self->{'cache'}{$cache_key}) ?
-        $self->{'cache'}{$cache_key} :
-        undef;
+    $cache_key = "$machine_id/$key";
+    if (exists $self->{'cache'}{$cache_key})
+    {
+        $cache_rowid = $self->{'cache'}{$cache_key}{'rowid'};
+        $cache_value = $self->{'cache'}{$cache_key}{'value'};
+    }
 
     # start transaction mode
     $self->{'dbh'}{'AutoCommit'} = 0;
@@ -174,7 +178,7 @@ sub commit_info
             my $just_update = 0; # by default, we choose to insert 
 
             # do we already have this info with the same value?
-            if (defined $cache_value)
+            if (defined($cache_rowid) and defined($cache_value))
             {
                 $just_update = 1 if $value eq $cache_value;
             }
@@ -190,8 +194,11 @@ sub commit_info
                 $row = $sth->fetchrow_hashref;
                 $sth->finish;
 
-                $just_update = 1
-                    if defined($row) and $row->{'value'} eq $value;
+                if (defined($row) and $row->{'value'} eq $value)
+                {
+                    $just_update = 1;
+                    $cache_rowid = $row->{'id'};
+                }
             }
 
             # if the key-value pair was found and if the value didn't change
@@ -201,7 +208,7 @@ sub commit_info
             {
                 # same value, just update the row
                 $sth = $self->{'sth'}{'up_atominfo'};
-                $res = $sth->execute($unix, $row->{'id'});
+                $res = $sth->execute($unix, $cache_rowid);
                 unless ($res > 0)
                 {
                     $err = $sth->err;
@@ -261,7 +268,10 @@ sub commit_info
         }
         push @{$self->{'cache_keys_order'}}, $cache_key;
     }
-    $self->{'cache'}{$cache_key} = $value;
+    $self->{'cache'}{$cache_key} = {
+        rowid => $cache_rowid,
+        value => $value,
+    };
 
     return $return;
 }
