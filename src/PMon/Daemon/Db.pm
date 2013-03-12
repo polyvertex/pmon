@@ -20,6 +20,8 @@ use constant
     MAX_KEY_LENGTH      => 255,
     MAX_VALUE_LENGTH    => 255,
 
+    MAX_KEYS_CACHED => 1000, # maximum number of values cached for every machines
+
     # mysql error codes
     MYSQLERR_SERVER_GONE_ERROR => 2006,  # CR_SERVER_GONE_ERROR
     #MYSQLERR_SERVER_LOST       => 2013,  # CR_SERVER_LOST
@@ -41,10 +43,11 @@ sub new
         $self->{$_} = $args{$_};
     }
 
-    $self->{'dbh'}      = undef;
-    $self->{'sth'}      = { };
-    $self->{'machines'} = undef;
-    $self->{'inqueue'}  = [ ];
+    $self->{'dbh'}              = undef;
+    $self->{'sth'}              = { };
+    $self->{'machines'}         = undef;
+    $self->{'cache'}            = { }; # cache for the 'logatom' table
+    $self->{'cache_keys_order'} = [ ];
 
     # register poe handlers
     $poe_kernel->state('db_connect', $self, 'on_connect');
@@ -143,6 +146,12 @@ sub commit_info
     $value = substr($value, 0, MAX_VALUE_LENGTH)
         if length($value) > MAX_VALUE_LENGTH;
 
+    my $cache_key = "$machine_id/$key";
+    my $cache_value =
+        exists($self->{'cache'}{$cache_key}) ?
+        $self->{'cache'}{$cache_key} :
+        undef;
+
     # start transaction mode
     $self->{'dbh'}{'AutoCommit'} = 0;
     eval
@@ -159,22 +168,36 @@ sub commit_info
         }
 
         # insert info into the 'logatom' table
+        # we insert a row into the logatom table only when the value of a key
+        # on the same machine is new or is different than the previous one.
         {
-            # do we already have this info?
-            $sth = $self->{'sth'}{'sel_last_atominfo'};
-            $res = $sth->execute($machine_id, $key);
-            unless ($res)
+            my $just_update = 0; # by default, we choose to insert 
+
+            # do we already have this info with the same value?
+            if (defined $cache_value)
             {
-                $err = $sth->err;
-                die "Failed to insert atomic info ($err)! ", $sth->errstr, "\n";
+                $just_update = 1 if $value eq $cache_value;
             }
-            $row = $sth->fetchrow_hashref;
-            $sth->finish;
+            else
+            {
+                $sth = $self->{'sth'}{'sel_last_atominfo'};
+                $res = $sth->execute($machine_id, $key);
+                unless ($res)
+                {
+                    $err = $sth->err;
+                    die "Failed to insert atomic info ($err)! ", $sth->errstr, "\n";
+                }
+                $row = $sth->fetchrow_hashref;
+                $sth->finish;
+
+                $just_update = 1
+                    if defined($row) and $row->{'value'} eq $value;
+            }
 
             # if the key-value pair was found and if the value didn't change
             # yet, just update the 'unix_last' column of this row to mark the
             # change. otherwise, insert a new log line.
-            if (defined($row) and $row->{'value'} eq $value)
+            if ($just_update)
             {
                 # same value, just update the row
                 $sth = $self->{'sth'}{'up_atominfo'};
@@ -223,6 +246,22 @@ sub commit_info
 
     # restore default mode
     $self->{'dbh'}{'AutoCommit'} = 1;
+
+    # update cache but first ensure it doesn't get too big
+    unless (exists $self->{'cache'}{$cache_key})
+    {
+        # make space in the cache for our new value
+        # cache works like a fifo, the older value gets delete so we can push
+        # the new one.
+        if (@{$self->{'cache_keys_order'}} >= MAX_KEYS_CACHED)
+        {
+            my $count = @{$self->{'cache_keys_order'}} - MAX_KEYS_CACHED + 1;
+            my @keys_to_del = splice @{$self->{'cache_keys_order'}}, 0, $count;
+            delete $self->{'cache'}{$_} foreach (@keys_to_del);
+        }
+        push @{$self->{'cache_keys_order'}}, $cache_key;
+    }
+    $self->{'cache'}{$cache_key} = $value;
 
     return $return;
 }
