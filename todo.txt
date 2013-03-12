@@ -1,7 +1,28 @@
 
-SELECT `key`, COUNT(`key`) AS cnt FROM `logatom` GROUP BY `key` ORDER BY cnt DESC, `key` ASC
+* Daemon::Db: Store a cache of last sent values instead of SELETing the logatom
+  table each time. BUT populate the cache ONLY after successful insert/update!
+  How to limit the size of this cache?
 
 
+#-------------------------------------------------------------------------------
+# Useful SQL requests
+#-------------------------------------------------------------------------------
+# see what values flood the database
+SELECT `key`, COUNT(`key`) AS cnt
+FROM logatom
+GROUP BY `key`
+ORDER BY cnt DESC, `key` ASC;
+
+# see the total duration of the database in seconds and in days
+SELECT
+    (MAX(la.unix_last) - MIN(la.unix_first)) AS seconds,
+    ((MAX(la.unix_last) - MIN(la.unix_first)) / 86400) AS days
+FROM pmon.logatom AS la;
+
+
+#-------------------------------------------------------------------------------
+# Old TODO, features overview
+#-------------------------------------------------------------------------------
 * séparation client / serveur (i.e.: agent / daemon)
   * client :
     * récupération puis envoi minimal des données
