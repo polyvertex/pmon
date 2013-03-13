@@ -9,24 +9,54 @@
 use strict;
 use warnings;
 
+sub DEVTYPE_HDD       () { 0 }
+sub DEVTYPE_PARTITION () { 1 }
+
+
 my %info;
-my @hdd;
+my %devices;
 
 
-sub init_hdd_list
+sub populate_devices
 {
+    my @devnames;
+
     open(my $fh, '</proc/partitions')
         or die "Failed to open /proc/partitions! $!\n";
     while (<$fh>)
     {
         chomp;
-        if (/^\s*(\d+)\s+(\d+)\s+(\d+)\s+([hs]d\D+)$/)
+        if (/^\s*(\d+)\s+(\d+)\s+(\d+)\s+([hs]d\D+)(\d+.*)?$/)
         {
-            die "Could not find /dev/$4!\n" unless -e "/dev/$4";
-            push @hdd, $4;
+            if (defined $5)
+            {
+                die "Could not find /dev/$4$5!\n" unless -e "/dev/$4$5";
+                $devices{"$4$5"} = { type => DEVTYPE_PARTITION };
+                push @devnames, "$4$5";
+            }
+            else
+            {
+                die "Could not find /dev/$4!\n" unless -e "/dev/$4";
+                $devices{$4} = { type => DEVTYPE_HDD };
+                push @devnames, $4;
+            }
         }
     }
     close $fh;
+
+    # we will need the sector size for every devices
+    # to be able to compute the i/o stats
+    my $cmd = 'blockdev --getss ';
+    $cmd .= "/dev/$_ " foreach (@devnames);
+    chomp(my @sector_sizes = qx/$cmd/);
+    die "Failed to run command '$cmd' (code ", sprintf('0x%X', $?), ")!\n"
+        unless $? == 0;
+    for (my $i = 0; $i < @sector_sizes; ++$i)
+    {
+        die if $i >= @devnames;
+        die unless $sector_sizes[$i] =~ /^\d+$/; # unrecognized output line from the 'blockdev' call
+        $devices{$devnames[$i]}{'sector_size'} = int $sector_sizes[$i];
+    }
 }
 
 sub smart_info
@@ -48,8 +78,10 @@ sub smart_info
         209 => 1, # Offline Seek Performance
     );
 
-    foreach my $devname (@hdd)
+    foreach my $devname (sort keys(%devices))
     {
+        next if $devices{$devname}{'type'} != DEVTYPE_HDD;
+
         my $cmd   = "smartctl -a /dev/$devname";
         my @lines = qx/$cmd/;
         die "Failed to run command '$cmd' (code ", sprintf('0x%X', $?), ")!\n"
@@ -146,11 +178,39 @@ sub smart_info
     }
 }
 
+sub io_stats
+{
+    open(my $fh, '</proc/diskstats')
+        or die "Failed to open /proc/diskstats! $!\n";
+    while (<$fh>)
+    {
+        chomp;
+        if (/^\s+(\d+)\s+(\d+)\s+([\w\-]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)$/)
+        {
+            next unless exists $devices{$3};
+
+            my $devname = $3;
+            my $sectors_read = $6;
+            my $sectors_written = $10;
+
+            my $prefix =
+                ($devices{$devname}{'type'} == DEVTYPE_HDD) ? 'hdd' :
+                ($devices{$devname}{'type'} == DEVTYPE_PARTITION) ? 'mnt' :
+                undef;
+            die unless defined $prefix;
+
+            $info{"$prefix.$devname.bytes_r"} = $devices{$devname}{'sector_size'} * $sectors_read;
+            $info{"$prefix.$devname.bytes_w"} = $devices{$devname}{'sector_size'} * $sectors_written;
+        }
+    }
+    close $fh;
+}
 
 
 BEGIN { $ENV{'LC_ALL'} = 'POSIX'; }
-init_hdd_list;
+populate_devices;
 smart_info;
+io_stats;
 END
 {
     my $out = '';
