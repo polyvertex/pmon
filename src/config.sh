@@ -333,18 +333,19 @@ function install_stage_2()
     echo "Installation done."
     echo
     if [ $INSTALL_DAEMON -ne 0 -o $INSTALL_AGENT -ne 0 ]; then
-        echo "You will have to perform the following steps manually to finish your installation:"
+        echo "You may have to perform the following steps manually to finish your installation:"
         if [ $INSTALL_DAEMON -ne 0 ]; then
             echo "* Check daemon's config:"
             echo "    $INSTALL_DIR/etc/pmond.conf"
             echo "* Launch daemon if not done already:"
-            echo "    $INSTALL_DIR/bin/pmond.sh start"
-            echo "* Ensure daemon will be launched after reboot (depends on your distro)"
+            echo "    $INSTALL_DIR/bin/pmond.sh restart"
+            echo "* Configure your system to ensure daemon will be launched after reboot"
+            echo "  The details depend on your distro"
         fi
         if [ $INSTALL_AGENT -ne 0 ]; then
             echo "* Check agent's config:"
             echo "    $INSTALL_DIR/etc/pmona.conf"
-            echo "* Configure root's cron to frequently run the agent (every minutes here):"
+            echo "* Configure root's cron to run the agent every minutes:"
             echo "    */1 * * * * $INSTALL_DIR/bin/pmona.pl > /dev/null"
         fi
         echo
