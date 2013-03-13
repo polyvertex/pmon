@@ -23,7 +23,7 @@ sub init_hdd_list
         chomp;
         if (/^\s*(\d+)\s+(\d+)\s+(\d+)\s+([hs]d\D+)$/)
         {
-            die "Could not find /dev/$4!" unless -e "/dev/$4";
+            die "Could not find /dev/$4!" unless -e "/dev/$4\n";
             push @hdd, $4;
         }
     }
@@ -36,8 +36,8 @@ sub hdd_temp
     {
         my $cmd = "hddtemp -uC -n /dev/$name 2> /dev/null";
         my $res = qx/$cmd/;
-        die "Failed to run '$cmd' (code ", ($? >> 8), ")!"
-            unless ($? >> 8) == 0;
+        die "Failed to run '$cmd' (code ", sprintf('0x%X', $?), ")!\n"
+            unless $? == 0;
         chomp $res;
         $info{"hdd.$name.temp"} = $res # temperature in celsius
             if $res =~ /^(\d+)$/;
@@ -47,10 +47,9 @@ sub hdd_temp
 sub mount_points
 {
     # bytes
-    my @df   = qx/df -l/;
-    my $code = $? >> 8;
-    die "Failed to run 'df -l' command (code $code)!"
-      unless $code == 0;
+    my @df = qx/df -l/;
+    die "Failed to run 'df -l' command (code ", sprintf('0x%X', $?), ")!\n"
+      unless $? == 0;
     foreach (@df)
     {
         if (/^\/dev\/(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\S+)/i)
@@ -68,10 +67,9 @@ sub mount_points
     }
 
     # inodes
-    @df   = qx/df -li/;
-    $code = $? >> 8;
-    die "Failed to run 'df -li' command (code $code)!"
-      unless $code == 0;
+    @df = qx/df -li/;
+    die "Failed to run 'df -li' command (code ", sprintf('0x%X', $?), ")!\n"
+      unless $? == 0;
     foreach (@df)
     {
         if (/^\/dev\/(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\S+)/i)
@@ -91,9 +89,8 @@ sub mount_points
 sub mem_usage
 {
     my @free = qx/free -k/; # -k (kilobytes) is supposed to be the default, but who knows...
-    my $code = $? >> 8;
-    die "Failed to run 'free' command (code $code)!"
-      unless $code == 0;
+    die "Failed to run 'free' command (code ", sprintf('0x%X', $?), ")!\n"
+      unless $? == 0;
 
     foreach (@free)
     {
@@ -189,8 +186,8 @@ sub ps_loadavg
 sub ps_stat
 {
     my @ps = qx/ps --no-headers -A -o sid,pid,state,command/;
-    die "Failed to run ps command (code ", ($? >> 8), ")!"
-        unless ($? >> 8) == 0;
+    die "Failed to run ps command (code ", sprintf('0x%X', $?), ")!\n"
+        unless $? == 0;
 
     my %sids_ignored;
     my %sids;

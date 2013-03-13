@@ -22,7 +22,7 @@ sub init_hdd_list
         chomp;
         if (/^\s*(\d+)\s+(\d+)\s+(\d+)\s+([hs]d\D+)$/)
         {
-            die "Could not find /dev/$4!" unless -e "/dev/$4";
+            die "Could not find /dev/$4!" unless -e "/dev/$4\n";
             push @hdd, $4;
         }
     }
@@ -52,9 +52,8 @@ sub smart_info
     {
         my $cmd   = "smartctl -a /dev/$devname";
         my @lines = qx/$cmd/;
-        my $code  = $? >> 8;
-        die "Failed to run command '$cmd' (code $code)!"
-            unless $code == 0;
+        die "Failed to run command '$cmd' (code ", sprintf('0x%X', $?), ")!\n"
+            unless $? == 0;
 
         chomp(@lines);
 
@@ -112,7 +111,7 @@ sub smart_info
                 }
                 else
                 {
-                    die "Unrecognized line format inside SMART attributes list (line: \"$line\")!";
+                    die "Unrecognized line format inside SMART attributes list (line: \"$line\")!\n";
                 }
             }
             elsif ($line =~ /^Device\s+Model:\s+(\S+.*)$/i)

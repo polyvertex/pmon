@@ -17,7 +17,8 @@ my $EXPECTED = 2; # number of expected values
 
 my $cmd = "lynx -dump $url";
 my @lines = qx/$cmd/;
-die "Failed to run \"$cmd\"!\n" unless $? == 0;
+die "Failed to run \"$cmd\" (code ", sprintf('0x%X', $?), ")!\n"
+    unless $? == 0;
 
 my $found = 0;
 foreach (@lines)
