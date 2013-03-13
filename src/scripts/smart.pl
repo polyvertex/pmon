@@ -22,7 +22,7 @@ sub init_hdd_list
         chomp;
         if (/^\s*(\d+)\s+(\d+)\s+(\d+)\s+([hs]d\D+)$/)
         {
-            die "Could not find /dev/$4!" unless -e "/dev/$4\n";
+            die "Could not find /dev/$4!\n" unless -e "/dev/$4";
             push @hdd, $4;
         }
     }
