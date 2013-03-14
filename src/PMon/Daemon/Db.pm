@@ -373,7 +373,7 @@ sub on_disconnect
         #$self->commit if $commit_first; # flush remaining enqueued data
         warn "Disconnecting from DB...\n" if $commit_first;
 
-        $self->{'sth'} = undef;
+        $self->{'sth'} = { };
         $self->{'dbh'}->disconnect
             or warn "Failed to disconnect DBI (", $self->{'dbh'}->err, ")! ", $self->{'dbh'}->errstr, "\n";
         $self->{'dbh'} = undef;

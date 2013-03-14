@@ -3,18 +3,18 @@
 #-------------------------------------------------------------------------------
 # Useful SQL requests
 #-------------------------------------------------------------------------------
+# see which keys flood the database
+SELECT la.key, COUNT(la.key) AS cnt
+FROM logatom AS la
+GROUP BY la.key
+ORDER BY cnt DESC, la.key ASC;
+
 # see returned status from agents
 SELECT la.machine_id, m.name AS machine_name, la.unix_first, la.unix_last, la.value AS status
 FROM logatom AS la, machine AS m
 WHERE la.key='agent.status'
 AND m.id = la.machine_id
 ORDER BY la.machine_id ASC, la.id ASC;
-
-# see which keys flood the database
-SELECT la.key, COUNT(la.key) AS cnt
-FROM logatom AS la
-GROUP BY la.key
-ORDER BY cnt DESC, la.key ASC;
 
 # see the total duration of the database in seconds and in days
 SELECT
