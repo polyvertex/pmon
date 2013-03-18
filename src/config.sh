@@ -256,6 +256,8 @@ function install_stage_2()
     [ -e "$INSTALL_DIR/bin" ] || die 1 "Failed to create main directories structure in $INSTALL_DIR!"
     [ -e "$INSTALL_DIR/etc" ] || mkdir "$INSTALL_DIR/etc"
     [ -e "$INSTALL_DIR/var" ] || mkdir "$INSTALL_DIR/var"
+    [ -e "$INSTALL_DIR/var/htdocs" ] || mkdir "$INSTALL_DIR/var/htdocs"
+    [ -e "$INSTALL_DIR/var/rrd" ] || mkdir "$INSTALL_DIR/var/rrd"
     if [ $INSTALL_AGENT -ne 0 ]; then
         [ -e "$INSTALL_DIR/etc/scripts" ] || mkdir "$INSTALL_DIR/etc/scripts"
     fi
@@ -302,12 +304,13 @@ function install_stage_2()
 
     # install daemon's binary files
     if [ $INSTALL_DAEMON -ne 0 ]; then
-        for fname in PMon pmond.pl pmond.sh; do
+        for fname in PMon pmond.pl pmond.sh pmon-graph.pl; do
             [ -d "$INSTALL_DIR/bin/$fname" ] && rm -rf "$INSTALL_DIR/bin/$fname"
             mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/"
         done
         chmod 0750 "$INSTALL_DIR/bin/pmond.pl"
         chmod 0750 "$INSTALL_DIR/bin/pmond.sh"
+        chmod 0750 "$INSTALL_DIR/bin/pmon-graph.pl"
     fi
 
     # daemon: try to create the /etc/init.d symlink
