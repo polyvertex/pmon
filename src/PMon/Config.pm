@@ -208,7 +208,7 @@ sub get_subst_str
     {
         while ((my $idx = index($value, $key)) >= $[)
         {
-            $value = substr $value, $idx, length($key), $subst;
+            substr $value, $idx, length($key), $subst;
         }
     }
 
