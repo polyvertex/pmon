@@ -9,8 +9,9 @@
 use strict;
 use warnings;
 
-use DBI;
+use File::Basename ();
 use Getopt::Long ();
+use DBI;
 
 # declare our own local "lib" directory
 my $MY_DIR;
@@ -70,11 +71,12 @@ my %RRD_TEMPLATES = (
 #-------------------------------------------------------------------------------
 sub usage
 {
+    my $name = File::Basename::basename($0);
     my $default_config_file = DEFAULT_CONFIG_FILE;
 
   die <<USAGE;
 Usage:
-    $0 [options]
+    $name [options]
 
 Parameters:
     --help, -h
