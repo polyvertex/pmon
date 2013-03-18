@@ -199,8 +199,8 @@ sub io_stats
                 undef;
             die unless defined $prefix;
 
-            $info{"$prefix.$devname.bytes_r"} = $devices{$devname}{'sector_size'} * $sectors_read;
-            $info{"$prefix.$devname.bytes_w"} = $devices{$devname}{'sector_size'} * $sectors_written;
+            $info{"$prefix.$devname.bytes.r"} = $devices{$devname}{'sector_size'} * $sectors_read;
+            $info{"$prefix.$devname.bytes.w"} = $devices{$devname}{'sector_size'} * $sectors_written;
         }
     }
     close $fh;
