@@ -43,11 +43,11 @@ sub new
         $self->{$_} = $args{$_};
     }
 
-    $self->{'dbh'}              = undef;
-    $self->{'sth'}              = { };
-    $self->{'machines'}         = undef;
-    $self->{'cache'}            = { }; # cache for the 'logatom' table
-    $self->{'cache_keys_order'} = [ ];
+    $self->{dbh}              = undef;
+    $self->{sth}              = { };
+    $self->{machines}         = undef;
+    $self->{cache}            = { }; # cache for the 'logatom' table
+    $self->{cache_keys_order} = [ ];
 
     # register poe handlers
     $poe_kernel->state('db_connect', $self, 'on_connect');
@@ -83,7 +83,7 @@ sub shutdown
 #-------------------------------------------------------------------------------
 sub is_connected
 {
-    my $dbh = shift()->{'dbh'};
+    my $dbh = shift()->{dbh};
     return defined($dbh); # and $dbh->ping;
 }
 
@@ -91,16 +91,16 @@ sub is_connected
 sub q
 {
     my ($self, $value) = @_;
-    return unless defined $self->{'dbh'};
-    return $self->{'dbh'}->quote($value);
+    return unless defined $self->{dbh};
+    return $self->{dbh}->quote($value);
 }
 
 #-------------------------------------------------------------------------------
 sub qi
 {
     my ($self, $value) = @_;
-    return unless defined $self->{'dbh'};
-    return $self->{'dbh'}->quote_identifier($value);
+    return unless defined $self->{dbh};
+    return $self->{dbh}->quote_identifier($value);
 }
 
 #-------------------------------------------------------------------------------
@@ -112,12 +112,12 @@ sub commit_uptime
     return unless defined $machine_id;
     return unless $uptime =~ /^\d+$/;
 
-    my $sth = $self->{'sth'}{'up_machine'};
+    my $sth = $self->{sth}{up_machine};
     my $res = $sth->execute($unix, $uptime, $machine_id);
     unless ($res > 0)
     {
         warn "Failed to update machine uptime (", $sth->err, ")! ", $sth->errstr, "\n";
-        if ($self->{'dbh'}{'Driver'}{'Name'} eq 'mysql' and
+        if ($self->{dbh}{Driver}{Name} eq 'mysql' and
             $sth->err == MYSQLERR_SERVER_GONE_ERROR)
         {
             warn "Reconnecting to database...\n";
@@ -150,20 +150,20 @@ sub commit_info
         if length($value) > MAX_VALUE_LENGTH;
 
     $cache_key = "$machine_id/$key";
-    if (exists $self->{'cache'}{$cache_key})
+    if (exists $self->{cache}{$cache_key})
     {
-        $cache_rowid = $self->{'cache'}{$cache_key}{'rowid'};
-        $cache_value = $self->{'cache'}{$cache_key}{'value'};
+        $cache_rowid = $self->{cache}{$cache_key}{rowid};
+        $cache_value = $self->{cache}{$cache_key}{value};
     }
 
     # start transaction mode
-    $self->{'dbh'}{'AutoCommit'} = 0;
+    $self->{dbh}{AutoCommit} = 0;
     eval
     {
         my ($sth, $res, $row);
 
         # insert info into the normal 'log' table
-        $sth = $self->{'sth'}{'ins_info'};
+        $sth = $self->{sth}{ins_info};
         $res = $sth->execute($unix, $machine_id, $key, $value);
         unless ($res > 0)
         {
@@ -184,7 +184,7 @@ sub commit_info
             }
             else
             {
-                $sth = $self->{'sth'}{'sel_last_atominfo'};
+                $sth = $self->{sth}{sel_last_atominfo};
                 $res = $sth->execute($machine_id, $key);
                 unless ($res)
                 {
@@ -194,10 +194,10 @@ sub commit_info
                 $row = $sth->fetchrow_hashref;
                 $sth->finish;
 
-                if (defined($row) and $row->{'value'} eq $value)
+                if (defined($row) and $row->{value} eq $value)
                 {
                     $just_update = 1;
-                    $cache_rowid = $row->{'id'};
+                    $cache_rowid = $row->{id};
                 }
             }
 
@@ -207,7 +207,7 @@ sub commit_info
             if ($just_update)
             {
                 # same value, just update the row
-                $sth = $self->{'sth'}{'up_atominfo'};
+                $sth = $self->{sth}{up_atominfo};
                 $res = $sth->execute($unix, $cache_rowid);
                 unless ($res > 0)
                 {
@@ -218,7 +218,7 @@ sub commit_info
             else
             {
                 # insert a new row
-                $sth = $self->{'sth'}{'ins_atominfo'};
+                $sth = $self->{sth}{ins_atominfo};
                 $res = $sth->execute($machine_id, $key, $unix, $unix, $value);
                 unless ($res > 0)
                 {
@@ -229,20 +229,20 @@ sub commit_info
         }
 
         # finally, commit transaction
-        unless ($self->{'dbh'}->commit)
+        unless ($self->{dbh}->commit)
         {
-            $err = $self->{'dbh'}->err;
-            die "Failed to commit info's transaction ($err)! ", $self->{'dbh'}->errstr, "\n";
+            $err = $self->{dbh}->err;
+            die "Failed to commit info's transaction ($err)! ", $self->{dbh}->errstr, "\n";
         }
     };
     if ($@)
     {
         $return = 0;
         warn $@;
-        $self->{'dbh'}->rollback
-            or warn "Failed to rollback transaction after errors (", $self->{'dbh'}->err, ")! ", $self->{'dbh'}->errstr, "\n";
+        $self->{dbh}->rollback
+            or warn "Failed to rollback transaction after errors (", $self->{dbh}->err, ")! ", $self->{dbh}->errstr, "\n";
         if (defined($err) and 
-            $self->{'dbh'}{'Driver'}{'Name'} eq 'mysql' and
+            $self->{dbh}{Driver}{Name} eq 'mysql' and
             $err == MYSQLERR_SERVER_GONE_ERROR)
         {
             warn "Reconnecting to database...\n";
@@ -252,23 +252,23 @@ sub commit_info
     }
 
     # restore default mode
-    $self->{'dbh'}{'AutoCommit'} = 1;
+    $self->{dbh}{AutoCommit} = 1;
 
     # update cache but first ensure it doesn't get too big
-    unless (exists $self->{'cache'}{$cache_key})
+    unless (exists $self->{cache}{$cache_key})
     {
         # make space in the cache for our new value
         # cache works like a fifo, the older value gets delete so we can push
         # the new one.
-        if (@{$self->{'cache_keys_order'}} >= MAX_KEYS_CACHED)
+        if (@{$self->{cache_keys_order}} >= MAX_KEYS_CACHED)
         {
-            my $count = @{$self->{'cache_keys_order'}} - MAX_KEYS_CACHED + 1;
-            my @keys_to_del = splice @{$self->{'cache_keys_order'}}, 0, $count;
-            delete $self->{'cache'}{$_} foreach (@keys_to_del);
+            my $count = @{$self->{cache_keys_order}} - MAX_KEYS_CACHED + 1;
+            my @keys_to_del = splice @{$self->{cache_keys_order}}, 0, $count;
+            delete $self->{cache}{$_} foreach (@keys_to_del);
         }
-        push @{$self->{'cache_keys_order'}}, $cache_key;
+        push @{$self->{cache_keys_order}}, $cache_key;
     }
-    $self->{'cache'}{$cache_key} = {
+    $self->{cache}{$cache_key} = {
         rowid => $cache_rowid,
         value => $value,
     };
@@ -282,21 +282,21 @@ sub commit_info
 sub on_connect
 {
     my ($self, $poe_session) = @_[OBJECT, SESSION];
-    my $db_uri  = $self->{'source'};
-    my $db_user = $self->{'user'};
-    my $db_pass = $self->{'pass'};
+    my $db_uri  = $self->{source};
+    my $db_user = $self->{user};
+    my $db_pass = $self->{pass};
 
     $poe_kernel->delay('db_connect'); # kill timer
-    return if defined $self->{'dbh'};
+    return if defined $self->{dbh};
 
-    $self->{'dbh'} = DBI->connect(
+    $self->{dbh} = DBI->connect(
         $db_uri, $db_user, $db_pass, {
             AutoCommit => 1,
             RaiseError => 0,
             PrintWarn  => 1,
             PrintError => 0,
         } );
-    unless (defined $self->{'dbh'})
+    unless (defined $self->{dbh})
     {
         warn "Failed to connect DBI (", $DBI::err, ")! ", $DBI::errstr, "\n";
         $poe_kernel->delay('db_connect', DELAY_CONNECT_RETRY);
@@ -305,22 +305,22 @@ sub on_connect
 
     # prepare statements
     my $step = 0;
-    $self->{'dbh'}{'RaiseError'} = 1;
+    $self->{dbh}{RaiseError} = 1;
     eval
     {
-        $self->{'sth'} = { };
+        $self->{sth} = { };
 
-        $self->{'sth'}{'ins_machine'} = $self->{'dbh'}->prepare(
+        $self->{sth}{ins_machine} = $self->{dbh}->prepare(
             'INSERT INTO machine (name) VALUES (?)');
         $step++;
 
-        $self->{'sth'}{'up_machine'} = $self->{'dbh'}->prepare(qq{
+        $self->{sth}{up_machine} = $self->{dbh}->prepare(qq{
             UPDATE machine SET unix = ?, uptime = ?
             WHERE id = ?
             LIMIT 1 });
         $step++;
 
-        $self->{'sth'}{'ins_info'} = $self->{'dbh'}->prepare(
+        $self->{sth}{ins_info} = $self->{dbh}->prepare(
             'INSERT INTO '.$self->qi('log').' ('.
             $self->qi('unix').', '.
             $self->qi('machine_id').', '.
@@ -329,7 +329,7 @@ sub on_connect
             'VALUES (?, ?, ?, ?)');
         $step++;
 
-        $self->{'sth'}{'sel_last_atominfo'} = $self->{'dbh'}->prepare(
+        $self->{sth}{sel_last_atominfo} = $self->{dbh}->prepare(
             'SELECT id, '.$self->qi('value').' '.
             'FROM logatom '.
             'WHERE machine_id = ? '.
@@ -338,13 +338,13 @@ sub on_connect
             'LIMIT 1');
         $step++;
 
-        $self->{'sth'}{'up_atominfo'} = $self->{'dbh'}->prepare(qq{
+        $self->{sth}{up_atominfo} = $self->{dbh}->prepare(qq{
             UPDATE logatom SET unix_last = ?
             WHERE id = ?
             LIMIT 1 });
         $step++;
 
-        $self->{'sth'}{'ins_atominfo'} = $self->{'dbh'}->prepare(
+        $self->{sth}{ins_atominfo} = $self->{dbh}->prepare(
             'INSERT INTO logatom ('.
             $self->qi('machine_id').', '.
             $self->qi('key').', '.
@@ -355,7 +355,7 @@ sub on_connect
         $step++;
     };
     die "Failed to prepare DB statements (step $step)! $@\n" if $@;
-    $self->{'dbh'}{'RaiseError'} = 0;
+    $self->{dbh}{RaiseError} = 0;
 
     # commit enqueued data if needed
     #$self->commit;
@@ -368,15 +368,15 @@ sub on_disconnect
 {
     my ($self, $poe_session, $commit_first) = @_[OBJECT, SESSION, ARG0];
 
-    if (defined $self->{'dbh'})
+    if (defined $self->{dbh})
     {
         #$self->commit if $commit_first; # flush remaining enqueued data
         warn "Disconnecting from DB...\n" if $commit_first;
 
-        $self->{'sth'} = { };
-        $self->{'dbh'}->disconnect
-            or warn "Failed to disconnect DBI (", $self->{'dbh'}->err, ")! ", $self->{'dbh'}->errstr, "\n";
-        $self->{'dbh'} = undef;
+        $self->{sth} = { };
+        $self->{dbh}->disconnect
+            or warn "Failed to disconnect DBI (", $self->{dbh}->err, ")! ", $self->{dbh}->errstr, "\n";
+        $self->{dbh} = undef;
     }
 }
 
@@ -389,17 +389,17 @@ sub _read_machines
 
     return unless $self->is_connected;
 
-    my $sth = $self->{'dbh'}->prepare('SELECT id, name FROM machine');
+    my $sth = $self->{dbh}->prepare('SELECT id, name FROM machine');
     unless (defined $sth->execute)
     {
         warn 'Failed to fetch machines from db ('.$sth->err.')! ', $sth->errstr, "\n";
         return;
     }
 
-    $self->{'machines'} = { };
+    $self->{machines} = { };
     while (my $row = $sth->fetchrow_hashref)
     {
-        $self->{'machines'}{$row->{'name'}} = $row->{'id'};
+        $self->{machines}{$row->{name}} = $row->{id};
     }
 }
 
@@ -423,16 +423,16 @@ sub _machine_id
         return;
     }
 
-    $self->_read_machines unless defined $self->{'machines'};
-    return unless defined $self->{'machines'}; # in case _read_machines() failed
+    $self->_read_machines unless defined $self->{machines};
+    return unless defined $self->{machines}; # in case _read_machines() failed
 
     # if we already know this machine, just return its id...
-    my $id = _match_machine $self->{'machines'}, $machine_name;
+    my $id = _match_machine $self->{machines}, $machine_name;
     return $id if defined $id;
 
     # ... otherwise, we have to register it
     {
-        my $sth = $self->{'sth'}{'ins_machine'};
+        my $sth = $self->{sth}{ins_machine};
         my $res = $sth->execute($machine_name);
         if ($res != 1)
         {
@@ -445,7 +445,7 @@ sub _machine_id
     $self->_read_machines;
 
     # check if our machine is there now
-    $id = _match_machine $self->{'machines'}, $machine_name;
+    $id = _match_machine $self->{machines}, $machine_name;
     return $id if defined $id;
 
     # still not?!

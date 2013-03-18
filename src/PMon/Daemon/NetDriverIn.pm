@@ -26,10 +26,10 @@ sub new
     {
         my %args = @_;
 
-        $self->[BLOCK_SIZE] = $args{'BlockSize'}
-            if exists($args{'BlockSize'})
-            and defined($args{'BlockSize'})
-            and $args{'BlockSize'} > 0;
+        $self->[BLOCK_SIZE] = $args{BlockSize}
+            if exists($args{BlockSize})
+            and defined($args{BlockSize})
+            and $args{BlockSize} > 0;
     }
 
     return $self;

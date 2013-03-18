@@ -71,8 +71,8 @@ sub flush_info
         alarm SEND_TIMEOUT;
 
         my $proto = getprotobyname 'udp';
-        my $iaddr = gethostbyname $ref_config->{'server_host'};
-        my $sin   = sockaddr_in $ref_config->{'server_port'}, $iaddr;
+        my $iaddr = gethostbyname $ref_config->{server_host};
+        my $sin   = sockaddr_in $ref_config->{server_port}, $iaddr;
         my $sock;
 
         socket $sock, PF_INET, SOCK_DGRAM, $proto;
@@ -80,8 +80,8 @@ sub flush_info
 
         if ($sent != length $server_buffer)
         {
-            my $err = "Incomplete send() to ".$ref_config->{'server_host'}.":".
-                $ref_config->{'server_port'}." ($sent/".length($server_buffer).
+            my $err = "Incomplete send() to ".$ref_config->{server_host}.":".
+                $ref_config->{server_port}." ($sent/".length($server_buffer).
                 " bytes)!";
             push @errors, $err;
             warn $err, "\n";
@@ -114,7 +114,7 @@ sub send_info
         return;
     }
 
-    my $message = "pmon1 ".$ref_config->{'machine_uniq'}." $info\n";
+    my $message = "pmon1 ".$ref_config->{machine_uniq}." $info\n";
 
     if (length($message) >= MAX_UDP_BUFFER_LENGTH and !length($server_buffer))
     {
@@ -253,28 +253,28 @@ else # read text config file
         unless @{$oconf->sections_list} > 0;
 
     # machine name
-    $ref_config->{'machine_uniq'} = $oconf->get_str('machine_uniq');
+    $ref_config->{machine_uniq} = $oconf->get_str('machine_uniq');
     die "Setting 'machine_uniq' not found or have incorrect format in ", CONFIG_FILE, "!\n"
-        unless defined($ref_config->{'machine_uniq'})
-        and $ref_config->{'machine_uniq'} =~ /^[\w\-\_\.]+$/;
+        unless defined($ref_config->{machine_uniq})
+        and $ref_config->{machine_uniq} =~ /^[\w\-\_\.]+$/;
 
     # server host
-    $ref_config->{'server_host'} = $oconf->get_str('server_host');
+    $ref_config->{server_host} = $oconf->get_str('server_host');
     die "Setting 'server_host' not found or have incorrect format in ", CONFIG_FILE, "!\n"
-        unless defined($ref_config->{'server_host'})
-        and $ref_config->{'server_host'} =~ /^[0-9A-Za-z\.\-_]+$/;
+        unless defined($ref_config->{server_host})
+        and $ref_config->{server_host} =~ /^[0-9A-Za-z\.\-_]+$/;
 
     # server port
-    $ref_config->{'server_port'} = $oconf->get_int(
-        'server_port', $ref_config->{'server_port'}, 1, 65535);
+    $ref_config->{server_port} = $oconf->get_int(
+        'server_port', $ref_config->{server_port}, 1, 65535);
 
     # busy uptime
-    $ref_config->{'busy_uptime'} = $oconf->get_int(
-        'busy_uptime', $ref_config->{'busy_uptime'}, 60, 3600);
+    $ref_config->{busy_uptime} = $oconf->get_int(
+        'busy_uptime', $ref_config->{busy_uptime}, 60, 3600);
 
     # daily hour
-    $ref_config->{'daily_hour'} = $oconf->get_int(
-        'daily_hour', $ref_config->{'daily_hour'}, 0, 23);
+    $ref_config->{daily_hour} = $oconf->get_int(
+        'daily_hour', $ref_config->{daily_hour}, 0, 23);
 
     # collect all enabled scripts
     foreach my $script_name (@{$oconf->sections_list})
@@ -288,8 +288,8 @@ else # read text config file
 
         my $args = $oconf->get_str("$script_name/args", '');
 
-        push @{$ref_config->{'scripts_order'}}, $script_name;
-        $ref_config->{'scripts'}{$script_name} = {
+        push @{$ref_config->{scripts_order}}, $script_name;
+        $ref_config->{scripts}{$script_name} = {
             freq => uc $freq,
             args => $args,
         };
@@ -320,14 +320,14 @@ else # read text config file
     warn "All scripts forced.\n" if $force_all and -t STDERR;
 
     # select accepted frequencies
-    $accepted_freq{'M'} = 1;
-    $accepted_freq{'H'} = 1
+    $accepted_freq{M} = 1;
+    $accepted_freq{H} = 1
         if $force_all
-        or $uptime < $ref_config->{'busy_uptime'}
+        or $uptime < $ref_config->{busy_uptime}
         or ($now_min >= 0 and $now_min <= 5);
-    $accepted_freq{'D'} = 1
+    $accepted_freq{D} = 1
         if $force_all
-        or ( ($now_hour == $ref_config->{'daily_hour'} or $uptime < $ref_config->{'busy_uptime'})
+        or ( ($now_hour == $ref_config->{daily_hour} or $uptime < $ref_config->{busy_uptime})
         and $now_min % 10 == 0 );
 }
 
@@ -338,14 +338,14 @@ send_info "sys.uptime $uptime";
 
 # launch scripts in separate processes
 my $read_set = IO::Select->new();
-foreach my $script_name (@{$ref_config->{'scripts_order'}})
+foreach my $script_name (@{$ref_config->{scripts_order}})
 {
     my $script = SCRIPTS_DIR."/$script_name";
-    my $ref_script = $ref_config->{'scripts'}{$script_name};
+    my $ref_script = $ref_config->{scripts}{$script_name};
 
     die "Script $script_name is enabled in config file but not found in ", SCRIPTS_DIR, "!\n"
         unless -e SCRIPTS_DIR."/$script_name";
-    next unless exists $accepted_freq{$ref_script->{'freq'}};
+    next unless exists $accepted_freq{$ref_script->{freq}};
 
     my @stats = stat $script;
     my $uid = $stats[4];
@@ -379,7 +379,7 @@ foreach my $script_name (@{$ref_config->{'scripts_order'}})
         my $res = eval {
             local $SIG{'ALRM'} = sub { $err = 'Timeout!'; die; };
             alarm CHILDREN_TIMEOUT;
-            system "$script ".$ref_script->{'args'};
+            system "$script ".$ref_script->{args};
             if ($? == -1)
             {
                 $err = "system() failed! $!";
@@ -417,7 +417,7 @@ while (my @fds = $read_set->can_read)
         my $slot;
         foreach my $s (values %children)
         {
-            if ($fd == $s->{'stdout'} or $fd == $s->{'stderr'})
+            if ($fd == $s->{stdout} or $fd == $s->{stderr})
             {
                 $slot = $s;
                 last;
@@ -439,9 +439,9 @@ while (my @fds = $read_set->can_read)
         }
         chomp $line;
         next unless length($line) > 0;
-        if ($fd == $slot->{'stderr'})
+        if ($fd == $slot->{stderr})
         {
-            push @{$slot->{'errout'}}, $line;
+            push @{$slot->{errout}}, $line;
             warn $line, "\n" if -t STDERR;
         }
         else
@@ -458,12 +458,12 @@ while (1)
 {
     my $pid = waitpid -1, 0;
     last unless $pid > 0;
-    $children{$pid}{'status'} = $? >> 8;
-    if ($children{$pid}{'status'} != 0)
+    $children{$pid}{status} = $? >> 8;
+    if ($children{$pid}{status} != 0)
     {
-        my $err = join ' ', map { chomp; $_ } @{$children{$pid}{'errout'}};
+        my $err = join ' ', map { chomp; $_ } @{$children{$pid}{errout}};
         chomp $err;
-        $err = $children{$pid}{'name'}.": $err";
+        $err = $children{$pid}{name}.": $err";
         push @errors, $err;
         warn $err, "\n";
     }

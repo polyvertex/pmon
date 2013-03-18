@@ -38,12 +38,12 @@ sub new
             unless exists($args{$_}) and defined($args{$_});
     }
 
-    $self->{'config'} = PMon::Config->new(
-        file   => $args{'configfile'},
+    $self->{config} = PMon::Config->new(
+        file   => $args{configfile},
         strict => 1);
 
-    $self->{'db'}  = undef;
-    $self->{'net'} = undef;
+    $self->{db}  = undef;
+    $self->{net} = undef;
 
     # init main poe session
     POE::Session->create(
@@ -72,15 +72,15 @@ sub _shutdown
     my $self = shift;
 
     # shutdown subsystems
-    if (defined $self->{'net'})
+    if (defined $self->{net})
     {
-        $self->{'net'}->shutdown;
-        $self->{'net'} = undef;
+        $self->{net}->shutdown;
+        $self->{net} = undef;
     }
-    if (defined $self->{'db'})
+    if (defined $self->{db})
     {
-        $self->{'db'}->shutdown;
-        $self->{'db'} = undef;
+        $self->{db}->shutdown;
+        $self->{db} = undef;
     }
 }
 
@@ -103,17 +103,17 @@ sub on_start
     #$poe_kernel->sig(USR2 => 'sigtrap');
 
     # connect to db
-    $self->{'db'} = PMon::Daemon::Db->new(
-        source => $self->{'config'}->get_str('db_source'),
-        user   => $self->{'config'}->get_str('db_user'),
-        pass   => $self->{'config'}->get_str('db_pass') );
-    $self->{'db'}->start;
+    $self->{db} = PMon::Daemon::Db->new(
+        source => $self->{config}->get_str('db_source'),
+        user   => $self->{config}->get_str('db_user'),
+        pass   => $self->{config}->get_str('db_pass') );
+    $self->{db}->start;
 
     # start network service
-    $self->{'net'} = PMon::Daemon::Net->new(
-        bind_addr => $self->{'config'}->get_str('service_bind_addr'),
-        bind_port => $self->{'config'}->get_int('service_port') );
-    $self->{'net'}->start;
+    $self->{net} = PMon::Daemon::Net->new(
+        bind_addr => $self->{config}->get_str('service_bind_addr'),
+        bind_port => $self->{config}->get_int('service_port') );
+    $self->{net}->start;
 }
 
 #----------------------------------------------------------------------------
@@ -153,11 +153,11 @@ sub on_agent_info
 
     if ($info->key eq 'sys.uptime')
     {
-        $self->{'db'}->commit_uptime($info->machine, $info->time, $info->value);
+        $self->{db}->commit_uptime($info->machine, $info->time, $info->value);
     }
     else
     {
-        $self->{'db'}->commit_info($info->machine, $info->time, $info->key, $info->value);
+        $self->{db}->commit_info($info->machine, $info->time, $info->key, $info->value);
     }
 }
 

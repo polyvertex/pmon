@@ -33,37 +33,37 @@ sub new
 
     $self->{'time'} = time;
 
-    $self->{'addr_packed'} = $args{'addr_packed'}
-        if exists $args{'addr_packed'};
-    $self->{'is_received'} = 1
-        if exists($args{'is_received'}) and $args{'is_received'};
-    $self->{'line'} = $args{'line'}
-        if exists $args{'line'};
+    $self->{addr_packed} = $args{addr_packed}
+        if exists $args{addr_packed};
+    $self->{is_received} = 1
+        if exists($args{is_received}) and $args{is_received};
+    $self->{line} = $args{line}
+        if exists $args{line};
 
-    if (defined $self->{'line'})
+    if (defined $self->{line})
     {
-        chomp $self->{'line'};
+        chomp $self->{line};
 
         my ($magic, $machine, $key, $value) =
-            split /\s+/, $self->{'line'}, 4;
+            split /\s+/, $self->{line}, 4;
 
         if (defined($value) and
             $magic eq 'pmon1' and
             $machine =~ /^[\w\-\_\.]+$/ and
             $key =~ /^[\w\-\_\.]+$/)
         {
-            $self->{'magic'}   = $magic;
-            $self->{'machine'} = $machine;
-            $self->{'key'}     = $key;
-            $self->{'value'}   = $value;
+            $self->{magic}   = $magic;
+            $self->{machine} = $machine;
+            $self->{key}     = $key;
+            $self->{value}   = $value;
         }
-        #elsif (defined $self->{'addr_packed'})
+        #elsif (defined $self->{addr_packed})
         #{
-        #    warn "Malformed info line to/from ", $self->addr_str, "! Line: ", $self->{'line'}, "\n";
+        #    warn "Malformed info line to/from ", $self->addr_str, "! Line: ", $self->{line}, "\n";
         #}
         #else
         #{
-        #    warn "Malformed info line: ", $self->{'line'}, "\n";
+        #    warn "Malformed info line: ", $self->{line}, "\n";
         #}
     }
 
@@ -74,51 +74,51 @@ sub new
 sub is_valid
 {
     my $self = shift;
-    return defined($self->{'line'}) and defined($self->{'magic'});
+    return defined($self->{line}) and defined($self->{magic});
 }
 
 #-------------------------------------------------------------------------------
 sub addr_str
 {
     my $self = shift;
-    return unless defined $self->{'addr_packed'};
-    unless (defined $self->{'addr_str'})
+    return unless defined $self->{addr_packed};
+    unless (defined $self->{addr_str})
     {
-        ($self->{'addr_port'}, my $inet) = sockaddr_in $self->{'addr_packed'};
-        $self->{'addr_ip'}   = inet_ntoa $inet;
-        $self->{'addr_port'} = +$self->{'addr_port'};
-        $self->{'addr_str'}  = $self->{'addr_ip'}.':'.$self->{'addr_port'};
+        ($self->{addr_port}, my $inet) = sockaddr_in $self->{addr_packed};
+        $self->{addr_ip}   = inet_ntoa $inet;
+        $self->{addr_port} = +$self->{addr_port};
+        $self->{addr_str}  = $self->{addr_ip}.':'.$self->{addr_port};
     }
-    return $self->{'addr_str'};
+    return $self->{addr_str};
 }
 
 #-------------------------------------------------------------------------------
 sub addr_ip
 {
     my $self = shift;
-    return unless defined $self->{'addr_packed'};
-    $self->addr_str unless defined $self->{'addr_ip'};
-    return $self->{'addr_ip'};
+    return unless defined $self->{addr_packed};
+    $self->addr_str unless defined $self->{addr_ip};
+    return $self->{addr_ip};
 }
 
 #-------------------------------------------------------------------------------
 sub addr_port
 {
     my $self = shift;
-    return unless defined $self->{'addr_packed'};
-    $self->addr_str unless defined $self->{'addr_port'};
-    return $self->{'addr_port'};
+    return unless defined $self->{addr_packed};
+    $self->addr_str unless defined $self->{addr_port};
+    return $self->{addr_port};
 }
 
 #-------------------------------------------------------------------------------
-sub addr_packed { shift()->{'addr_packed'} }
-sub is_received { shift()->{'is_received'} }
-sub line        { shift()->{'line'} }
-sub magic       { shift()->{'magic'} }
-sub machine     { shift()->{'machine'} }
-sub time        { shift()->{'time'} }
-sub key         { shift()->{'key'} }
-sub value       { shift()->{'value'} }
+sub addr_packed { shift()->{addr_packed} }
+sub is_received { shift()->{is_received} }
+sub line        { shift()->{line} }
+sub magic       { shift()->{magic} }
+sub machine     { shift()->{machine} }
+sub time        { shift()->{time} }
+sub key         { shift()->{key} }
+sub value       { shift()->{value} }
 
 
 1;

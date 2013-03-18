@@ -68,22 +68,22 @@ BEGIN { $| = 1; }
 
 # parse parameters
 my $res = Getopt::Long::GetOptions(
-    'help|h'     => \$options{'help'},
-    'config=s'   => \$options{'configfile'},
-    'foreground' => \$options{'foreground'},
-    'logfile=s'  => \$options{'logfile'},
-    'pid=s'      => \$options{'pidfile'},
+    'help|h'     => \$options{help},
+    'config=s'   => \$options{configfile},
+    'foreground' => \$options{foreground},
+    'logfile=s'  => \$options{logfile},
+    'pid=s'      => \$options{pidfile},
 );
-usage unless $res and not $options{'help'};
-usage unless defined $options{'configfile'};
-usage unless defined $options{'logfile'};
-usage unless defined $options{'pidfile'};
+usage unless $res and not $options{help};
+usage unless defined $options{configfile};
+usage unless defined $options{logfile};
+usage unless defined $options{pidfile};
 
 # right we do nothing specific when we just have been (re)installed
 unlink FRESH_INSTALL_FILE if -e FRESH_INSTALL_FILE;
 
 # daemonize if wanted
-unless (IS_WINDOWS() or $options{'foreground'})
+unless (IS_WINDOWS() or $options{foreground})
 {
     require POSIX;
 
@@ -108,8 +108,8 @@ unless (IS_WINDOWS() or $options{'foreground'})
 
 # open log file and enable autoflush
 # http://perl.plover.com/FAQs/Buffering.html
-open($hlog, '>>', $options{'logfile'})
-    or die "Failed to open log file ", $options{'logfile'}, "! $!\n";
+open($hlog, '>>', $options{logfile})
+    or die "Failed to open log file ", $options{logfile}, "! $!\n";
 select((select($hlog), $|=1)[0]);
 #print $hlog "\n";
 
@@ -122,8 +122,8 @@ unless (IS_WINDOWS)
 
 # create pid file
 {
-    open(my $fh, '>', $options{'pidfile'})
-        or die "Failed to create PID file ", $options{'pidfile'}, "!\n";
+    open(my $fh, '>', $options{pidfile})
+        or die "Failed to create PID file ", $options{pidfile}, "!\n";
     print $fh "$$\n";
     close $fh;
 }
@@ -162,7 +162,7 @@ $SIG{'__WARN__'} = sub
 # launch service
 {
     $poe_kernel->has_forked;
-    PMon::Daemon->new(configfile => $options{'configfile'});
+    PMon::Daemon->new(configfile => $options{configfile});
     eval { POE::Kernel->run };
     if ($@)
     {
@@ -183,7 +183,7 @@ if (defined $hlog)
     print $hlog "\n";
     close $hlog;
 }
-unlink $options{'pidfile'}
-    if defined($options{'pidfile'}) and -e $options{'pidfile'};
+unlink $options{pidfile}
+    if defined($options{pidfile}) and -e $options{pidfile};
 
 exit $exitcode;

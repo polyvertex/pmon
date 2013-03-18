@@ -37,15 +37,15 @@ sub new
         $self->{$_} = $args{$_};
     }
 
-    $self->{'factories'} = { };
-    $self->{'listeners'} = { };
+    $self->{factories} = { };
+    $self->{listeners} = { };
 
     # split bind addresses
     {
-        my @bind_addr = split /\s+/, $self->{'bind_addr'};
+        my @bind_addr = split /\s+/, $self->{bind_addr};
         die "Too much bind addresses specified (", scalar(@bind_addr), "/", MAX_LISTENERS, ")!\n"
             if @bind_addr > MAX_LISTENERS;
-        $self->{'bind_addr'} = [ @bind_addr ];
+        $self->{bind_addr} = [ @bind_addr ];
     }
 
     # register poe handlers
@@ -62,25 +62,25 @@ sub start
 {
     my $self = shift;
 
-    die if keys(%{$self->{'factories'}}) > 0;
-    die if keys(%{$self->{'listeners'}}) > 0;
+    die if keys(%{$self->{factories}}) > 0;
+    die if keys(%{$self->{listeners}}) > 0;
 
-    foreach my $addr (@{$self->{'bind_addr'}})
+    foreach my $addr (@{$self->{bind_addr}})
     {
         my $factory = POE::Wheel::SocketFactory->new(
             SocketDomain   => AF_INET,
             SocketType     => SOCK_DGRAM,
             SocketProtocol => 'udp',
             BindAddress    => $addr,
-            BindPort       => $self->{'bind_port'},
+            BindPort       => $self->{bind_port},
             Reuse          => 'yes',
             SuccessEvent   => 'udpsvc_factory_success',
             FailureEvent   => 'udpsvc_factory_error',
         );
 
-        $self->{'factories'}{$factory->ID} = {
+        $self->{factories}{$factory->ID} = {
             factory => $factory,
-            label   => "$addr:".$self->{'bind_port'},
+            label   => "$addr:".$self->{bind_port},
         };
     }
 }
@@ -93,8 +93,8 @@ sub shutdown
     # TODO: check if something remains into the Filter AND Driver!
 
     # destroy wheels
-    $self->{'factories'} = { };
-    $self->{'listeners'} = { };
+    $self->{factories} = { };
+    $self->{listeners} = { };
 }
 
 
@@ -104,7 +104,7 @@ sub on_factory_success
 {
     my ($self, $socket, $factory_id) = @_[OBJECT, ARG0, ARG3];
 
-    return unless exists $self->{'factories'}{$factory_id};
+    return unless exists $self->{factories}{$factory_id};
 
     my $wheel = POE::Wheel::ReadWrite->new(
         Handle      => $socket,
@@ -114,13 +114,13 @@ sub on_factory_success
         ErrorEvent  => 'udpsvc_listener_error',
     );
 
-    $self->{'listeners'}{$wheel->ID} = {
-        label => $self->{'factories'}{$factory_id}{'label'},
+    $self->{listeners}{$wheel->ID} = {
+        label => $self->{factories}{$factory_id}{label},
         wheel => $wheel,
     };
-    delete $self->{'factories'}{$factory_id};
+    delete $self->{factories}{$factory_id};
 
-    warn "Listening on ", $self->{'listeners'}{$wheel->ID}{'label'}, ".\n";
+    warn "Listening on ", $self->{listeners}{$wheel->ID}{label}, ".\n";
 }
 
 #-------------------------------------------------------------------------------
@@ -128,8 +128,8 @@ sub on_factory_error
 {
     my ($self, $syscall, $errno, $errstr, $factory_id) = @_[OBJECT, ARG0 .. ARG3];
 
-    return unless exists $self->{'factories'}{$factory_id};
-    die "Failed to create listener on ", $self->{'factories'}{$factory_id}{'label'},
+    return unless exists $self->{factories}{$factory_id};
+    die "Failed to create listener on ", $self->{factories}{$factory_id}{label},
         " while calling $syscall()! Error $errno: $errstr\n";
 }
 
@@ -138,7 +138,7 @@ sub on_listener_read
 {
     my ($self, $input, $wheel_id) = @_[OBJECT, ARG0, ARG1];
 
-    return unless exists $self->{'listeners'}{$wheel_id};
+    return unless exists $self->{listeners}{$wheel_id};
     $poe_kernel->yield('agent_info', $input);
 }
 
@@ -147,12 +147,12 @@ sub on_listener_error
 {
     my ($self, $syscall, $errno, $errstr, $wheel_id) = @_[OBJECT, ARG0 .. ARG3];
 
-    return unless exists $self->{'listeners'}{$wheel_id};
-    warn "Error on UDP socket ", $self->{'listeners'}{$wheel_id}{'label'},
+    return unless exists $self->{listeners}{$wheel_id};
+    warn "Error on UDP socket ", $self->{listeners}{$wheel_id}{label},
         " while calling $syscall()! Error $errno: $errstr\n";
-    delete $self->{'listeners'}{$wheel_id};
+    delete $self->{listeners}{$wheel_id};
 
-    if (keys %{$self->{'listeners'}} <= 0)
+    if (keys %{$self->{listeners}} <= 0)
     {
         warn "All network listeners went down! Trying to restart...\n";
         $self->start;
