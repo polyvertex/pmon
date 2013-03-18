@@ -256,10 +256,12 @@ function install_stage_2()
     [ -e "$INSTALL_DIR/bin" ] || die 1 "Failed to create main directories structure in $INSTALL_DIR!"
     [ -e "$INSTALL_DIR/etc" ] || mkdir "$INSTALL_DIR/etc"
     [ -e "$INSTALL_DIR/var" ] || mkdir "$INSTALL_DIR/var"
-    [ -e "$INSTALL_DIR/var/htdocs" ] || mkdir "$INSTALL_DIR/var/htdocs"
-    [ -e "$INSTALL_DIR/var/rrd" ] || mkdir "$INSTALL_DIR/var/rrd"
     if [ $INSTALL_AGENT -ne 0 ]; then
         [ -e "$INSTALL_DIR/etc/scripts" ] || mkdir "$INSTALL_DIR/etc/scripts"
+    fi
+    if [ $INSTALL_DAEMON -ne 0 ]; then
+        [ -e "$INSTALL_DIR/var/htdocs" ] || mkdir "$INSTALL_DIR/var/htdocs"
+        [ -e "$INSTALL_DIR/var/rrd" ] || mkdir "$INSTALL_DIR/var/rrd"
     fi
 
     # install config files
