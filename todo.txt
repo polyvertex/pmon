@@ -3,6 +3,12 @@
 #-------------------------------------------------------------------------------
 # Useful SQL requests
 #-------------------------------------------------------------------------------
+# list the number of different known keys
+SELECT la.key
+FROM logatom AS la
+GROUP BY la.key
+ORDER BY la.key ASC;
+
 # see which keys flood the database
 SELECT la.key, COUNT(la.key) AS cnt
 FROM logatom AS la
