@@ -96,6 +96,19 @@ sub dbg_dump
 }
 
 #-------------------------------------------------------------------------------
+sub today_str
+{
+    my @t = localtime(shift() // time());
+    #return sprintf
+    #    '%04u-%02u-%02u %02u:%02u:%02u',
+    #    $t[5] + 1900, $t[4] + 1, $t[3],
+    #    $t[2], $t[1], $t[0];
+    return sprintf
+        '%04u-%02u-%02u',
+        $t[5] + 1900, $t[4] + 1, $t[3];
+}
+
+#-------------------------------------------------------------------------------
 sub cmdline_accumulate
 {
     my ($ref_cmdline, $cmdline_prefix, $opt_cmdline_suffix, $args_to_append) = @_;
@@ -209,7 +222,7 @@ sub rrd_create_and_update
                 '--start '.$ref_key2rrd->{rrd_start}.' '.
                 '--step '.$rrd_step.' ';
             $cmd .= sprintf
-                $ref_key2rrd->{rrd_tmpl}{dsfmt},
+                $ref_key2rrd->{rrd_tmpl}{dsfmt}.' ',
                 $ref_key2rrd->{rrd_name};
             $cmd .= "$_ "
                 foreach (@{$ref_key2rrd->{rrd_tmpl}{rra}});
@@ -310,7 +323,6 @@ sub rrd_create_and_update
                     }
 
                     $ref_lastrow = (@$rows > 0) ? $rows->[0] : undef;
-                    $rows = undef;
                 }
             }
 
@@ -323,14 +335,21 @@ sub rrd_create_and_update
 
 
 #-------------------------------------------------------------------------------
-sub graph_mem
+sub graph_usage
 {
     my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my $graph_name    = 'mem';
-    my $graph_title   = 'Memory';
+    my $graph_name    = 'usage';
+    my $graph_title   = 'Usage';
+    my $rrd_file_cpu  = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'cpu';
     my $rrd_file_mem  = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'mem';
     my $rrd_file_swap = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'swap';
     my %infokeys2rrd = (
+        'cpu.usage' => {
+            rrd_name  => 'cpu',
+            rrd_file  => $rrd_file_cpu,
+            rrd_tmpl  => $RRD_TEMPLATES{percentage_per_minute},
+            rrd_start => $history_start,
+        },
         'mem.usage' => {
             rrd_name  => 'mem',
             rrd_file  => $rrd_file_mem,
@@ -367,8 +386,73 @@ sub graph_mem
             "--rigid ".
             "\"DEF:mem=$rrd_file_mem:mem:AVERAGE\" ".
             "\"DEF:swap=$rrd_file_swap:swap:AVERAGE\" ".
-            "\"LINE1:mem#00FFFF:Memory\" ".
-            "\"LINE1:swap#007BFF:Swap\" ";
+            "\"DEF:cpu=$rrd_file_cpu:cpu:AVERAGE\" ".
+            "\"AREA:mem#00FFFF:Memory\" ".
+            "\"LINE1:swap#00A0FF:Swap\" ".
+            "\"LINE1:cpu#DC2F2F:CPU\" ";
+        chomp(my @lines = qx/$cmd 2>&1/);
+        die "Failed to generate $file! Command: $cmd\n",
+            "Output:\n  ", join("\n  ", @lines), "\n"
+            unless $? == 0;
+    }
+}
+
+#-------------------------------------------------------------------------------
+sub graph_load
+{
+    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
+    my $graph_name         = 'load';
+    my $graph_title        = 'Load';
+    my $rrd_file_loadavg1  = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'loadavg1';
+    my $rrd_file_loadavg5  = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'loadavg5';
+    my $rrd_file_loadavg15 = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'loadavg15';
+    my %infokeys2rrd = (
+        'ps.loadavg1' => {
+            rrd_name  => 'loadavg1',
+            rrd_file  => $rrd_file_loadavg1,
+            rrd_tmpl  => $RRD_TEMPLATES{absvalue_per_minute},
+            rrd_start => $history_start,
+        },
+        'ps.loadavg5' => {
+            rrd_name  => 'loadavg5',
+            rrd_file  => $rrd_file_loadavg5,
+            rrd_tmpl  => $RRD_TEMPLATES{absvalue_per_minute},
+            rrd_start => $history_start,
+        },
+        'ps.loadavg15' => {
+            rrd_name  => 'loadavg15',
+            rrd_file  => $rrd_file_loadavg15,
+            rrd_tmpl  => $RRD_TEMPLATES{absvalue_per_minute},
+            rrd_start => $history_start,
+        },
+    );
+
+    # create and/or update all the necessary rrd file(s)
+    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
+
+    # create graph for each period
+    foreach my $ref_period (@$ref_periods)
+    {
+        my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
+        my $title = "$graph_title - $ref_period->{title}";
+
+        my $cmd =
+            "rrdtool graph \"$file\" ".
+            "--start now-".$ref_period->{days}."d ".
+            "--end now ".
+            "--title \"$title\" ".
+            "--vertical-label \"usage\" ".
+            "--width ".$ref_period->{graph_width}." ".
+            "--height ".$ref_period->{graph_height}." ".
+            "--lower-limit 0 ".
+            #"--upper-limit 100 ".
+            #"--rigid ".
+            "\"DEF:loadavg15=$rrd_file_loadavg15:loadavg15:AVERAGE\" ".
+            "\"DEF:loadavg5=$rrd_file_loadavg5:loadavg5:AVERAGE\" ".
+            "\"DEF:loadavg1=$rrd_file_loadavg1:loadavg1:AVERAGE\" ".
+            "\"AREA:loadavg15#00FFFF:Average 15min\" ".
+            "\"LINE1:loadavg5#00A0FF:Average 5min\" ".
+            "\"LINE1:loadavg1#0019A6:Average 1min\" ";
         chomp(my @lines = qx/$cmd 2>&1/);
         die "Failed to generate $file! Command: $cmd\n",
             "Output:\n  ", join("\n  ", @lines), "\n"
@@ -384,6 +468,7 @@ sub generate_graphs
     my ($ctx, $machine_id) = @_;
     my $ref_machine = $ctx->{machines}{$machine_id};
     my $year_ago    = $ctx->{now} - (365 * 86400);
+    my $today_str   = today_str $ctx->{now};
     my $available_info_keys;
 
     # list all the info keys available within the desired period
@@ -403,34 +488,34 @@ sub generate_graphs
         {
             name         => 'day',
             days         => 1,
-            title        => 'Today',
-            graph_width  => 400,
+            title        => $today_str,
+            graph_width  => 500,
             graph_height => 100,
         },
         {
             name         => 'week',
             days         => 7,
-            title        => 'This Week',
-            graph_width  => 400,
+            title        => "$today_str - week",
+            graph_width  => 500,
             graph_height => 100,
         },
         {
             name         => 'month',
             days         => 30,
-            title        => 'This Month',
-            graph_width  => 800,
-            graph_height => 50,
+            title        => "$today_str - month",
+            graph_width  => 1000,
+            graph_height => 60,
         },
         {
             name         => 'year',
             days         => 365,
-            title        => 'This Year',
-            graph_width  => 800,
-            graph_height => 50,
+            title        => "$today_str - year",
+            graph_width  => 1000,
+            graph_height => 60,
         },
     );
     main->can("graph_$_")->($ctx, $available_info_keys, $machine_id, $year_ago, \@periods)
-        foreach (qw( mem )); #load mem net storage named apache lighttpd ));
+        foreach (qw( usage load )); # net storage named apache lighttpd ));
 }
 
 #-------------------------------------------------------------------------------
@@ -441,7 +526,7 @@ my %ctx = ( # global context
     db_source  => undef,
     db_user    => undef,
     db_pass    => undef,
-    db_maxrows => 5000,
+    db_maxrows => 10_000,
 
     dir_rrd    => DEFAULT_RRD_DIR,
     dir_htdocs => DEFAULT_HTDOCS_DIR,
