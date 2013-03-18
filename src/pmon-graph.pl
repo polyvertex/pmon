@@ -65,6 +65,14 @@ my %RRD_TEMPLATES = (
             'RRA:AVERAGE:0.5:360:1460', # avg every 6 hours, 365 days of data
         ],
     },
+    abscounter_per_hour => {
+        step  => 3600,
+        dsfmt => 'DS:%s:COUNTER:3900:0:U',
+        rra   => [
+            'RRA:AVERAGE:0.5:1:720',  # no avg, 30 days of data
+            'RRA:AVERAGE:0.5:3:2920', # avg every 3 hours, 365 days of data
+        ],
+    },
 );
 
 
@@ -371,7 +379,7 @@ sub graph_usage
     foreach my $ref_period (@$ref_periods)
     {
         my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
-        my $title = "$graph_title - $ref_period->{title}";
+        my $title = "$graph_title / $ref_period->{title}";
 
         my $cmd =
             "rrdtool graph \"$file\" ".
@@ -383,7 +391,8 @@ sub graph_usage
             "--height ".$ref_period->{graph_height}." ".
             "--lower-limit 0 ".
             "--upper-limit 100 ".
-            "--rigid ".
+            #"--rigid ".
+            "--units-exponent 0 ".
             "\"DEF:mem=$rrd_file_mem:mem:AVERAGE\" ".
             "\"DEF:swap=$rrd_file_swap:swap:AVERAGE\" ".
             "\"DEF:cpu=$rrd_file_cpu:cpu:AVERAGE\" ".
@@ -434,7 +443,7 @@ sub graph_load
     foreach my $ref_period (@$ref_periods)
     {
         my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
-        my $title = "$graph_title - $ref_period->{title}";
+        my $title = "$graph_title / $ref_period->{title}";
 
         my $cmd =
             "rrdtool graph \"$file\" ".
@@ -447,6 +456,7 @@ sub graph_load
             "--lower-limit 0 ".
             #"--upper-limit 100 ".
             #"--rigid ".
+            "--units-exponent 0 ".
             "\"DEF:loadavg15=$rrd_file_loadavg15:loadavg15:AVERAGE\" ".
             "\"DEF:loadavg5=$rrd_file_loadavg5:loadavg5:AVERAGE\" ".
             "\"DEF:loadavg1=$rrd_file_loadavg1:loadavg1:AVERAGE\" ".
@@ -457,6 +467,84 @@ sub graph_load
         die "Failed to generate $file! Command: $cmd\n",
             "Output:\n  ", join("\n  ", @lines), "\n"
             unless $? == 0;
+    }
+}
+
+#-------------------------------------------------------------------------------
+sub graph_net
+{
+    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
+    my @netifs;
+    my %infokeys2rrd;
+
+    sub _netif2rrdname { my $n = shift(); $n =~ s%[\:\-]%_%g; $n; }
+    sub _netif2rrdfile {
+        my ($dir, $mid, $netif_name, $inout) = @_;
+        rrd_build_path $dir, $mid, 'net', $netif_name.$inout;
+    }
+
+    # list available network interfaces
+    {
+        # perl *rulez*!
+        my $regex = qr/net\.([^\.]+)\.bytes\.(in|out)$/;
+        my %matches =
+            map { /$regex/; $1 => 1 }
+            grep(/$regex/, @$ref_available_info_keys);
+        @netifs = sort keys(%matches);
+    }
+
+    # populate %infokeys2rrd
+    foreach my $netif (@netifs)
+    {
+        my $netif_name = _netif2rrdname $netif;
+        foreach my $inout (qw( in out ))
+        {
+            $infokeys2rrd{"net.$netif.bytes.$inout"} = {
+                rrd_name  => $netif_name.$inout,
+                rrd_file  => _netif2rrdfile($ctx->{dir_rrd}, $machine_id, $netif_name, $inout),
+                rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_hour},
+                rrd_start => $history_start,
+            };
+        }
+    }
+
+    # create and/or update all the necessary rrd file(s)
+    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
+
+    # create graph for each interface and each period
+    foreach my $netif (@netifs)
+    {
+        my $netif_name  = _netif2rrdname $netif;
+        my $rrdfile_in  = _netif2rrdfile($ctx->{dir_rrd}, $machine_id, $netif_name, 'in');
+        my $rrdfile_out = _netif2rrdfile($ctx->{dir_rrd}, $machine_id, $netif_name, 'out');
+
+        foreach my $ref_period (@$ref_periods)
+        {
+            my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-net$netif_name-$ref_period->{name}.png";
+            my $title = "Traffic on $netif / $ref_period->{title}";
+
+            my $cmd =
+                "rrdtool graph \"$file\" ".
+                "--start now-".$ref_period->{days}."d ".
+                "--end now ".
+                "--title \"$title\" ".
+                "--vertical-label \"bytes/s\" ".
+                "--width ".$ref_period->{graph_width}." ".
+                "--height ".$ref_period->{graph_height}." ".
+                "--lower-limit 0 ".
+                #"--upper-limit 100 ".
+                #"--rigid ".
+                #"--units-exponent 0 ".
+                #"--base 1024 ".
+                "\"DEF:in=$rrdfile_in:${netif_name}in:AVERAGE\" ".
+                "\"DEF:out=$rrdfile_out:${netif_name}out:AVERAGE\" ".
+                "\"LINE1:in#AEE39E:In\" ".
+                "\"LINE1:out#DC2F2F:Out\" ";
+            chomp(my @lines = qx/$cmd 2>&1/);
+            die "Failed to generate $file! Command: $cmd\n",
+                "Output:\n  ", join("\n  ", @lines), "\n"
+                unless $? == 0;
+        }
     }
 }
 
@@ -488,34 +576,34 @@ sub generate_graphs
         {
             name         => 'day',
             days         => 1,
-            title        => $today_str,
+            title        => "$ref_machine->{name} / $today_str",
             graph_width  => 500,
             graph_height => 100,
         },
         {
             name         => 'week',
             days         => 7,
-            title        => "$today_str - week",
+            title        => "$ref_machine->{name} / $today_str",
             graph_width  => 500,
             graph_height => 100,
         },
         {
             name         => 'month',
             days         => 30,
-            title        => "$today_str - month",
+            title        => "$ref_machine->{name} / $today_str",
             graph_width  => 1000,
             graph_height => 60,
         },
         {
             name         => 'year',
             days         => 365,
-            title        => "$today_str - year",
+            title        => "$ref_machine->{name} / $today_str",
             graph_width  => 1000,
             graph_height => 60,
         },
     );
     main->can("graph_$_")->($ctx, $available_info_keys, $machine_id, $year_ago, \@periods)
-        foreach (qw( usage load )); # net storage named apache lighttpd ));
+        foreach (qw( usage load net )); # storage named apache lighttpd ));
 }
 
 #-------------------------------------------------------------------------------
