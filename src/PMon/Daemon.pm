@@ -32,7 +32,7 @@ sub new
     die if defined $SELF;
     $SELF = $self;
 
-    foreach (qw( configfile ))
+    foreach (qw( rootdir configfile ))
     {
         die "Parameter '$_' not defined!"
             unless exists($args{$_}) and defined($args{$_});
@@ -40,7 +40,9 @@ sub new
 
     $self->{config} = PMon::Config->new(
         file   => $args{configfile},
-        strict => 1);
+        strict => 1,
+        subst  => { '{BASEDIR}' => $args{rootdir}, },
+    );
 
     $self->{db}  = undef;
     $self->{net} = undef;

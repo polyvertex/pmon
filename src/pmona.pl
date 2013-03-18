@@ -248,6 +248,7 @@ else # read text config file
     my $oconf = PMon::Config->new(
         file   => CONFIG_FILE,
         strict => 1,
+        #subst  => { '{BASEDIR}' => $MY_DIR.'/..', },
     );
     die "No configured scripts found in ", CONFIG_FILE, "!\n"
         unless @{$oconf->sections_list} > 0;

@@ -162,7 +162,10 @@ $SIG{'__WARN__'} = sub
 # launch service
 {
     $poe_kernel->has_forked;
-    PMon::Daemon->new(configfile => $options{configfile});
+    PMon::Daemon->new(
+        rootdir    => $MY_DIR.'/..',
+        configfile => $options{configfile},
+    );
     eval { POE::Kernel->run };
     if ($@)
     {
