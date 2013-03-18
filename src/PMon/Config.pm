@@ -193,6 +193,15 @@ sub get_str
     my ($self, $key, $opt_default) = @_;
 
     return $opt_default unless exists $self->{settings}{$key};
+    return $self->{settings}{$key};
+}
+
+#-------------------------------------------------------------------------------
+sub get_subst_str
+{
+    my ($self, $key, $opt_default) = @_;
+
+    return $opt_default unless exists $self->{settings}{$key};
 
     my $value = $self->{settings}{$key};
     while (my ($key, $subst) = each %{$self->{subst}})
