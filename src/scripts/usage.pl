@@ -170,7 +170,7 @@ sub cpu_usage
 sub ps_loadavg
 {
     # expected output format from /proc/loadavg:
-    # avg1 avg2 avg3 running_threads/total_threads last_running_pid
+    # avg1 avg5 avg15 running_threads/total_threads last_running_pid
     my $file = '/proc/loadavg';
     open(my $fh, '<', $file) or die "Failed to open $file! $!\n";
     chomp(my @values = split(/[\s\/]+/, <$fh>));
@@ -178,9 +178,9 @@ sub ps_loadavg
     die "Unrecognized output format from $file!\n"
       unless @values >= 6;
 
-    $info{'ps.loadavg1'} = $values[0];
-    $info{'ps.loadavg2'} = $values[1];
-    $info{'ps.loadavg3'} = $values[2];
+    $info{'ps.loadavg1'}  = $values[0];
+    $info{'ps.loadavg5'}  = $values[1];
+    $info{'ps.loadavg15'} = $values[2];
 }
 
 sub ps_stat
