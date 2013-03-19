@@ -586,6 +586,7 @@ sub graph_storage_access
     my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
     my @devices;
     my %infokeys2rrd;
+    my %mount_points;
 
     sub _device2rrdname { my $n = shift(); $n =~ s%[^\dA-Za-z]%_%g; $n; }
     sub _device2rrdfile {
@@ -630,6 +631,25 @@ sub graph_storage_access
         return unless -e $f and rrd_last_update($f) > $history_start;
     }
 
+    # fetch mount points from the database
+    foreach my $half_key (@devices)
+    {
+        my ($storage_type, $device) = split /\./, $half_key; # split "mnt.hda1"
+        next unless $storage_type eq 'mnt';
+        next if exists $mount_points{$device};
+        my $rows = $ctx->{dbh}->selectall_arrayref(
+            "SELECT la.value ".
+            "FROM logatom AS la ".
+            "WHERE machine_id = $machine_id ".
+            "AND la.key = ".$ctx->{dbh}->quote("mnt.$device.point")." ".
+            "ORDER BY la.id DESC ".
+            "LIMIT 1 ");
+        $mount_points{$device} =
+            (defined($rows) and @$rows == 1) ?
+            $rows->[0][0] :
+            'swap'; # we could not find its root name, so this is probably a swap partition
+    }
+
     # create graph for each interface and each period
     foreach my $half_key (@devices)
     {
@@ -641,7 +661,10 @@ sub graph_storage_access
         foreach my $ref_period (@$ref_periods)
         {
             my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-storaccess-$device_name-$ref_period->{name}.png";
-            my $title = "$device throughput / $ref_period->{title}";
+            my $mntpt =
+                exists($mount_points{$device}) ?
+                "($mount_points{$device}) " : '';
+            my $title = "$device throughput $mntpt/ $ref_period->{title}";
 
             my $cmd =
                 "rrdtool graph \"$file\" ".
