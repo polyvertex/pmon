@@ -65,14 +65,14 @@ my %RRD_TEMPLATES = (
             'RRA:AVERAGE:0.5:360:1460', # avg every 6 hours, 365 days of data
         ],
     },
-    abscounter_per_hour => {
-        step  => 3600,
-        dsfmt => 'DS:%s:COUNTER:3900:0:U',
-        rra   => [
-            'RRA:AVERAGE:0.5:1:720',  # no avg, 30 days of data
-            'RRA:AVERAGE:0.5:3:2920', # avg every 3 hours, 365 days of data
-        ],
-    },
+    #abscounter_per_hour => {
+    #    step  => 3600,
+    #    dsfmt => 'DS:%s:COUNTER:3900:0:U',
+    #    rra   => [
+    #        'RRA:AVERAGE:0.5:1:720',  # no avg, 30 days of data
+    #        'RRA:AVERAGE:0.5:3:2920', # avg every 3 hours, 365 days of data
+    #    ],
+    #},
 );
 
 
@@ -171,7 +171,7 @@ sub rrd_file_path
     {
         $opt_rrd_subname = undef
             unless length($opt_rrd_subname) > 0;
-        $opt_rrd_subname =~ s%[^\w\_]%_%g
+        $opt_rrd_subname =~ s%[^\w\-\_]%_%g
             if defined $opt_rrd_subname;
     }
 
@@ -502,10 +502,10 @@ sub graph_net
     my @netifs;
     my %infokeys2rrd;
 
-    sub _netif2rrdname { my $n = shift(); $n =~ s%[\:\-]%_%g; $n; }
+    sub _netif2rrdname { my $n = shift(); $n =~ s%[^\dA-Za-z]%_%g; $n; }
     sub _netif2rrdfile {
         my ($dir, $mid, $netif_name, $inout) = @_;
-        rrd_file_path $dir, $mid, 'net', $netif_name.$inout;
+        rrd_file_path $dir, $mid, 'net', $netif_name.'-'.$inout;
     }
 
     # list available network interfaces
@@ -552,8 +552,8 @@ sub graph_net
 
         foreach my $ref_period (@$ref_periods)
         {
-            my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-net$netif_name-$ref_period->{name}.png";
-            my $title = "Traffic on $netif / $ref_period->{title}";
+            my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-net-$netif_name-$ref_period->{name}.png";
+            my $title = "$netif throughput / $ref_period->{title}";
 
             my $cmd =
                 "rrdtool graph \"$file\" ".
@@ -581,13 +581,101 @@ sub graph_net
 }
 
 #-------------------------------------------------------------------------------
+sub graph_storage_access
+{
+    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
+    my @devices;
+    my %infokeys2rrd;
+
+    sub _device2rrdname { my $n = shift(); $n =~ s%[^\dA-Za-z]%_%g; $n; }
+    sub _device2rrdfile {
+        my ($dir, $mid, $device_name, $rw) = @_;
+        rrd_file_path $dir, $mid, 'storaccess', $device_name.'-'.$rw;
+    }
+
+    # list available storage devices
+    {
+        # perl *rulez*!
+        my $regex = qr/^((hdd|mnt)\.[^\.]+)\.bytes\.[rw]$/;
+        my %matches =
+            map { /$regex/; $1 => 1 }
+            grep(/$regex/, @$ref_available_info_keys);
+        @devices = sort keys(%matches);
+    }
+
+    # populate %infokeys2rrd
+    foreach my $half_key (@devices)
+    {
+        my ($storage_type, $device) = split /\./, $half_key; # split "mnt.hda1"
+        my $device_name = _device2rrdname $device;
+
+        foreach my $rw (qw( r w ))
+        {
+            $infokeys2rrd{"$storage_type.$device.bytes.$rw"} = {
+                rrd_name  => $device_name.$rw,
+                rrd_file  => _device2rrdfile($ctx->{dir_rrd}, $machine_id, $device_name, $rw),
+                rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
+                rrd_start => $history_start,
+            };
+        }
+    }
+
+    # create and/or update all the necessary rrd file(s)
+    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
+
+    # do not render graphics if at least one of the rrd files is not up-to-date
+    foreach (sort keys(%infokeys2rrd))
+    {
+        my $f = $infokeys2rrd{$_}{rrd_file};
+        return unless -e $f and rrd_last_update($f) > $history_start;
+    }
+
+    # create graph for each interface and each period
+    foreach my $half_key (@devices)
+    {
+        my ($storage_type, $device) = split /\./, $half_key; # split "mnt.hda1"
+        my $device_name   = _device2rrdname $device;
+        my $rrdfile_read  = _device2rrdfile($ctx->{dir_rrd}, $machine_id, $device_name, 'r');
+        my $rrdfile_write = _device2rrdfile($ctx->{dir_rrd}, $machine_id, $device_name, 'w');
+
+        foreach my $ref_period (@$ref_periods)
+        {
+            my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-storaccess-$device_name-$ref_period->{name}.png";
+            my $title = "$device throughput / $ref_period->{title}";
+
+            my $cmd =
+                "rrdtool graph \"$file\" ".
+                "--start now-".$ref_period->{days}."d ".
+                "--end now ".
+                "--title \"$title\" ".
+                "--vertical-label \"bytes/s\" ".
+                "--width ".$ref_period->{graph_width}." ".
+                "--height ".$ref_period->{graph_height}." ".
+                "--lower-limit 0 ".
+                #"--upper-limit 100 ".
+                #"--rigid ".
+                #"--units-exponent 0 ".
+                #"--base 1024 ".
+                "\"DEF:read=$rrdfile_read:${device_name}r:AVERAGE\" ".
+                "\"DEF:write=$rrdfile_write:${device_name}w:AVERAGE\" ".
+                "\"LINE1:read#AEE39E:Read\" ".
+                "\"LINE1:write#DC2F2F:Write\" ";
+            chomp(my @lines = qx/$cmd 2>&1/);
+            die "Failed to generate $file! Command: $cmd\n",
+                "Output:\n  ", join("\n  ", @lines), "\n"
+                unless $? == 0;
+        }
+    }
+}
+
+#-------------------------------------------------------------------------------
 sub graph_named
 {
     my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
     my $graph_name      = 'named';
     my $graph_title     = 'Bind9';
-    my $rrd_file_reqin  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'named', 'reqin';
-    my $rrd_file_reqout = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'named', 'reqout';
+    my $rrd_file_reqin  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'named', 'req-in';
+    my $rrd_file_reqout = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'named', 'req-out';
     my %infokeys2rrd = (
         'named.req.in' => {
             rrd_name  => 'reqin',
@@ -824,7 +912,7 @@ sub generate_graphs
         },
     );
     main->can("graph_$_")->($ctx, $available_info_keys, $machine_id, $year_ago, \@periods)
-        foreach (qw( usage load net named apache lighttpd )); # storage ));
+        foreach (qw( usage load net storage_access named apache lighttpd ));
 }
 
 #-------------------------------------------------------------------------------
