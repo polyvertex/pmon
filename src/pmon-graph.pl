@@ -655,8 +655,7 @@ usage unless $res and not $ctx{help};
 
 # connect to database
 $ctx{dbh} = DBI->connect(
-    'dbi:mysql:db=pmon;host=localhost',
-    'pmon', 'jsVTrpW7NBXXdvjP', {
+    $ctx{db_source}, $ctx{db_user}, $ctx{db_pass}, {
         AutoCommit => 1,
         RaiseError => 1,
         PrintWarn  => 1,
