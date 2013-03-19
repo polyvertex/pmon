@@ -393,6 +393,7 @@ sub graph_usage
             "--upper-limit 100 ".
             #"--rigid ".
             "--units-exponent 0 ".
+            #"--base 1024 ".
             "\"DEF:mem=$rrd_file_mem:mem:AVERAGE\" ".
             "\"DEF:swap=$rrd_file_swap:swap:AVERAGE\" ".
             "\"DEF:cpu=$rrd_file_cpu:cpu:AVERAGE\" ".
@@ -457,6 +458,7 @@ sub graph_load
             #"--upper-limit 100 ".
             #"--rigid ".
             "--units-exponent 0 ".
+            #"--base 1024 ".
             "\"DEF:loadavg15=$rrd_file_loadavg15:loadavg15:AVERAGE\" ".
             "\"DEF:loadavg5=$rrd_file_loadavg5:loadavg5:AVERAGE\" ".
             "\"DEF:loadavg1=$rrd_file_loadavg1:loadavg1:AVERAGE\" ".
@@ -502,7 +504,7 @@ sub graph_net
             $infokeys2rrd{"net.$netif.bytes.$inout"} = {
                 rrd_name  => $netif_name.$inout,
                 rrd_file  => _netif2rrdfile($ctx->{dir_rrd}, $machine_id, $netif_name, $inout),
-                rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_hour},
+                rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
                 rrd_start => $history_start,
             };
         }
@@ -545,6 +547,62 @@ sub graph_net
                 "Output:\n  ", join("\n  ", @lines), "\n"
                 unless $? == 0;
         }
+    }
+}
+
+#-------------------------------------------------------------------------------
+sub graph_named
+{
+    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
+    my $graph_name      = 'named';
+    my $graph_title     = 'Bind9';
+    my $rrd_file_reqin  = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'named', 'reqin';
+    my $rrd_file_reqout = rrd_build_path $ctx->{dir_rrd}, $machine_id, 'named', 'reqout';
+    my %infokeys2rrd = (
+        'named.req.in' => {
+            rrd_name  => 'reqin',
+            rrd_file  => $rrd_file_reqin,
+            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
+            rrd_start => $history_start,
+        },
+        'named.req.out' => {
+            rrd_name  => 'reqout',
+            rrd_file  => $rrd_file_reqout,
+            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
+            rrd_start => $history_start,
+        },
+    );
+
+    # create and/or update all the necessary rrd file(s)
+    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
+
+    # create graph for each period
+    foreach my $ref_period (@$ref_periods)
+    {
+        my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
+        my $title = "$graph_title / $ref_period->{title}";
+
+        my $cmd =
+            "rrdtool graph \"$file\" ".
+            "--start now-".$ref_period->{days}."d ".
+            "--end now ".
+            "--title \"$title\" ".
+            "--vertical-label \"requests/s\" ".
+            "--width ".$ref_period->{graph_width}." ".
+            "--height ".$ref_period->{graph_height}." ".
+            "--lower-limit 0 ".
+            #"--upper-limit 100 ".
+            #"--rigid ".
+            #"--units-exponent 0 ".
+            #"--base 1024 ".
+            "\"DEF:reqin=$rrd_file_reqin:reqin:AVERAGE\" ".
+            "\"DEF:reqout=$rrd_file_reqout:reqout:AVERAGE\" ".
+            "\"LINE1:reqin#AEE39E:Incoming Requests\" ".
+            "\"LINE1:reqout#DC2F2F:Outgoing Queries\" ";
+        chomp(my @lines = qx/$cmd 2>&1/);
+        die "Failed to generate $file! Command: $cmd\n",
+            "Output:\n  ", join("\n  ", @lines), "\n"
+            unless $? == 0;
     }
 }
 
@@ -603,7 +661,7 @@ sub generate_graphs
         },
     );
     main->can("graph_$_")->($ctx, $available_info_keys, $machine_id, $year_ago, \@periods)
-        foreach (qw( usage load net )); # storage named apache lighttpd ));
+        foreach (qw( usage load net named )); # storage apache lighttpd ));
 }
 
 #-------------------------------------------------------------------------------
@@ -614,7 +672,7 @@ my %ctx = ( # global context
     db_source  => undef,
     db_user    => undef,
     db_pass    => undef,
-    db_maxrows => 10_000,
+    db_maxrows => 10_000, # max number of rows fetched at time
 
     dir_rrd    => DEFAULT_RRD_DIR,
     dir_htdocs => DEFAULT_HTDOCS_DIR,
