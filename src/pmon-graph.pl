@@ -9,27 +9,21 @@
 use strict;
 use warnings;
 
+use FindBin ();
 use File::Basename ();
 use Getopt::Long ();
 use DBI;
 
-# declare our own local "lib" directory
-my $MY_DIR;
-BEGIN
-{
-    $MY_DIR = (__FILE__ =~ /(.*)[\\\/]/) ? $1 : '.';
-    unshift @INC, $MY_DIR;
-}
-
+use lib "$FindBin::RealBin";
 use PMon::Config;
 
 
 use constant
 {
     # default paths
-    DEFAULT_CONFIG_FILE => $MY_DIR.'/../etc/pmond.conf',
-    DEFAULT_RRD_DIR     => $MY_DIR.'/../var',
-    DEFAULT_HTDOCS_DIR  => $MY_DIR.'/../var/htdocs',
+    DEFAULT_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmond.conf',
+    DEFAULT_RRD_DIR     => $FindBin::RealBin.'/../var',
+    DEFAULT_HTDOCS_DIR  => $FindBin::RealBin.'/../var/htdocs',
 
     MAX_CMDLINE_LENGTH => ($^O =~ /^MSWin/i) ? 8191 : 32768,
 };
@@ -971,7 +965,7 @@ usage unless $res and not $ctx{help};
     my $oconf = PMon::Config->new(
         file   => $ctx{configfile},
         strict => 1,
-        subst  => { '{BASEDIR}' => $MY_DIR.'/..', },
+        subst  => { '{BASEDIR}' => $FindBin::RealBin.'/..', },
     );
 
     $ctx{db_source}  = $oconf->get_str('db_source');

@@ -9,22 +9,16 @@
 use strict;
 use warnings;
 
+use FindBin ();
 use Getopt::Long ();
 use POE;
 
-# declare our own local "lib" directory
-my $MY_DIR;
-BEGIN
-{
-    $MY_DIR = (__FILE__ =~ /(.*)[\\\/]/) ? $1 : '.';
-    unshift @INC, $MY_DIR;
-}
-
+use lib "$FindBin::RealBin";
 use PMon::Daemon;
 
 use constant
 {
-    FRESH_INSTALL_FILE => $MY_DIR.'/../var/.installed-daemon',
+    FRESH_INSTALL_FILE => $FindBin::RealBin.'/../var/.installed-daemon',
 };
 
 
@@ -163,7 +157,7 @@ $SIG{'__WARN__'} = sub
 {
     $poe_kernel->has_forked;
     PMon::Daemon->new(
-        rootdir    => $MY_DIR.'/..',
+        rootdir    => $FindBin::RealBin.'/..',
         configfile => $options{configfile},
     );
     eval { POE::Kernel->run };
