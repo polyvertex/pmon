@@ -11,6 +11,7 @@ use warnings;
 
 use FindBin ();
 use File::Basename ();
+use List::Util ();
 use Getopt::Long ();
 use DBI;
 
@@ -20,60 +21,115 @@ use PMon::Config;
 
 use constant
 {
+    MAX_CMDLINE_LENGTH => ($^O =~ /^MSWin/i) ? 8191 : 32768,
+
     # default paths
     DEFAULT_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmond.conf',
     DEFAULT_RRD_DIR     => $FindBin::RealBin.'/../var',
     DEFAULT_HTDOCS_DIR  => $FindBin::RealBin.'/../var/htdocs',
 
-    MAX_CMDLINE_LENGTH => ($^O =~ /^MSWin/i) ? 8191 : 32768,
+    # enum: graphic definition types
+    # * static: values are statically defined
+    # * dynamic: values keys are defined using a regex to match available info
+    #   keys from the database
+    # * dynamic in one graphic: same as 'dynamic' but every 'vnames' matched by
+    #   the regex will be rendered into a single graph (typically using a random
+    #   color)
+    GRAPHDEFINITION_STATIC           => 'static',
+    GRAPHDEFINITION_DYNAMIC          => 'dynamic',
+    GRAPHDEFINITION_DYNAMIC_ONEGRAPH => 'dynamic_onegraph',
+
+    # enum: rrd profiles
+    RRD_PROFILE_PERCENTAGE => 0,
+    RRD_PROFILE_ABSVALUE   => 1,
+    RRD_PROFILE_ABSCOUNTER => 2,
+    RRD_PROFILE_VALUE      => 3,
+
+    # enum: rra profiles
+    RRA_PROFILE_MINUTE => 0, # value is updated every minutes
+    RRA_PROFILE_HOUR   => 1, # value is updated every hours
 };
 
-my %RRD_TEMPLATES = (
-    percentage_per_minute => {
-        step  => 60,
-        dsfmt => 'DS:%s:GAUGE:100:0:100',
-        rra   => [
-            'RRA:AVERAGE:0.5:1:1440',   # no avg, 24 hours of data
-            'RRA:AVERAGE:0.5:10:1008',  # avg every 10 minutes, 7 days of data
-            'RRA:AVERAGE:0.5:30:1440',  # avg every 30 minutes, 30 days of data
-            'RRA:AVERAGE:0.5:360:1460', # avg every 6 hours, 365 days of data
-        ],
+use constant
+{
+    RRD_PROFILES => {
+        RRD_PROFILE_PERCENTAGE() => 'DS:%s:GAUGE:%i:0:100',
+        RRD_PROFILE_ABSVALUE()   => 'DS:%s:GAUGE:%i:0:U',
+        RRD_PROFILE_ABSCOUNTER() => 'DS:%s:COUNTER:%i:0:U',
+        RRD_PROFILE_VALUE()      => 'DS:%s:GAUGE:%i:U:U',
     },
-    absvalue_per_minute => {
-        step  => 60,
-        dsfmt => 'DS:%s:GAUGE:100:0:U',
-        rra   => [
-            'RRA:AVERAGE:0.5:1:1440',   # no avg, 24 hours of data
-            'RRA:AVERAGE:0.5:10:1008',  # avg every 10 minutes, 7 days of data
-            'RRA:AVERAGE:0.5:30:1440',  # avg every 30 minutes, 30 days of data
-            'RRA:AVERAGE:0.5:360:1460', # avg every 6 hours, 365 days of data
-        ],
+
+    RRA_PROFILES => {
+        RRA_PROFILE_MINUTE() => {           # if value is updated every minutes
+            step        => 60,               # seconds
+            heartbeat   => 75,               # seconds
+            definitions => [
+                'RRA:AVERAGE:0.5:1:1440',   # no avg, 24 hours of data
+                'RRA:AVERAGE:0.5:10:1008',  # avg every 10 minutes, 7 days of data
+                'RRA:AVERAGE:0.5:30:1440',  # avg every 30 minutes, 30 days of data
+                'RRA:AVERAGE:0.5:360:1460', # avg every 6 hours, 365 days of data
+                'RRA:MAX:0.5:1:1440',
+                'RRA:MAX:0.5:10:1008',
+                'RRA:MAX:0.5:30:1440',
+                'RRA:MAX:0.5:360:1460',
+                #'RRA:MIN:0.5:1:1440',
+                #'RRA:MIN:0.5:10:1008',
+                #'RRA:MIN:0.5:30:1440',
+                #'RRA:MIN:0.5:360:1460',
+            ],
+        },
+        RRA_PROFILE_HOUR() => {           # if value is updated every minutes
+            step        => 3600,           # seconds
+            heartbeat   => 3700,           # seconds
+            definitions => [
+                'RRA:AVERAGE:0.5:1:720',  # no avg, 30 days of data
+                'RRA:AVERAGE:0.5:3:2920', # avg every 3 hours, 365 days of data
+                'RRA:MAX:0.5:1:720',
+                'RRA:MAX:0.5:3:2920',
+                #'RRA:MIN:0.5:1:720',
+                #'RRA:MIN:0.5:3:2920',
+            ],
+        },
     },
-    abscounter_per_minute => {
-        step  => 60,
-        dsfmt => 'DS:%s:COUNTER:100:0:U',
-        rra   => [
-            'RRA:AVERAGE:0.5:1:1440',   # no avg, 24 hours of data
-            'RRA:AVERAGE:0.5:10:1008',  # avg every 10 minutes, 7 days of data
-            'RRA:AVERAGE:0.5:30:1440',  # avg every 30 minutes, 30 days of data
-            'RRA:AVERAGE:0.5:360:1460', # avg every 6 hours, 365 days of data
-        ],
+
+    PERIODS => {
+        1 => {
+            days         => 1,
+            name         => 'day',
+            label        => "Today",
+            graph_width  => 500,
+            graph_height => 100,
+        },
+        7 => {
+            days         => 7,
+            name         => 'week',
+            label        => "Week",
+            graph_width  => 500,
+            graph_height => 100,
+        },
+        30 => {
+            days         => 30,
+            name         => 'month',
+            label        => "Month",
+            graph_width  => 1000,
+            graph_height => 60,
+        },
+        365 => {
+            days         => 365,
+            name         => 'year',
+            label        => "Year",
+            graph_width  => 1000,
+            graph_height => 60,
+        },
     },
-    #abscounter_per_hour => {
-    #    step  => 3600,
-    #    dsfmt => 'DS:%s:COUNTER:3900:0:U',
-    #    rra   => [
-    #        'RRA:AVERAGE:0.5:1:720',  # no avg, 30 days of data
-    #        'RRA:AVERAGE:0.5:3:2920', # avg every 3 hours, 365 days of data
-    #    ],
-    #},
-);
+};
+
 
 
 #-------------------------------------------------------------------------------
 sub usage
 {
-    my $name = File::Basename::basename($0);
+    my $name = File::Basename::basename(__FILE__);
     my $default_config_file = DEFAULT_CONFIG_FILE;
 
   die <<USAGE;
@@ -86,6 +142,9 @@ Parameters:
     --config={config_file}
         Specify the path of the daemon's configuration file. Defaults to:
         $default_config_file
+    --graphdef={config_file}
+        Specify the path of the graphics definitions file.
+        Default configuration will be used if none specified.
 
 USAGE
 }
@@ -98,7 +157,7 @@ sub dbg_dump
 }
 
 #-------------------------------------------------------------------------------
-sub today_str
+sub date_str
 {
     my @t = localtime(shift() // time());
     #return sprintf
@@ -151,33 +210,41 @@ sub cmdline_accumulate
     }
 }
 
-
+#-------------------------------------------------------------------------------
+sub rrd_str2name
+{
+    my $name = shift;
+    $name =~ s%[^\w]%_%g;
+    return $name;
+}
 
 #-------------------------------------------------------------------------------
 sub rrd_file_path
 {
-    my ($dir, $machine_id, $rrd_name, $opt_rrd_subname) = @_;
+    my ($dir, $machine_id, $name) = @_;
 
     die unless $machine_id =~ /^\d+$/;
-    die unless $rrd_name =~ /^[\w\_]+$/;
+    die unless $name =~ /^[\w\-]+$/;
 
-    if (defined $opt_rrd_subname)
-    {
-        $opt_rrd_subname = undef
-            unless length($opt_rrd_subname) > 0;
-        $opt_rrd_subname =~ s%[^\w\-\_]%_%g
-            if defined $opt_rrd_subname;
-    }
-
-    my $file = "$dir/rrd-$machine_id-$rrd_name";
-    $file .= '-'.$opt_rrd_subname if defined $opt_rrd_subname;
-    $file .= '.rrd';
-
-    return $file;
+    return "$dir/rrd-$machine_id-$name.rrd";
 }
 
 #-------------------------------------------------------------------------------
-sub rrd_last_update
+#sub rrd_file_firstupdate
+#{
+#    my $rrd_file = shift;
+#
+#    my $cmd = qq{rrdtool first "$rrd_file" 2>&1};
+#    chomp(my @lines = qx/$cmd/);
+#    die "Failed to get first update from $rrd_file! Output:\n  ",
+#        join("\n  ", @lines), "\n"
+#        unless $? == 0 and @lines >= 1 and $lines[0] =~ /^\d+$/;
+#
+#    return int $lines[0];
+#}
+
+#-------------------------------------------------------------------------------
+sub rrd_file_lastupdate
 {
     my $rrd_file = shift;
 
@@ -191,7 +258,7 @@ sub rrd_last_update
 }
 
 #-------------------------------------------------------------------------------
-sub rrd_update_cmd
+sub rrd_file_update
 {
     my ($rrd_file, $ds_name, $ref_cmdline, $args_to_append) = @_;
     my $cmdline_prefix = qq{rrdtool update "$rrd_file" -t "$ds_name" };
@@ -202,49 +269,113 @@ sub rrd_update_cmd
 }
 
 #-------------------------------------------------------------------------------
-sub rrd_create_and_update
+sub graphdef_template
 {
-    my ($ctx, $ref_available_info_keys, $machine_id, $ref_infokeys2rrd) = @_;
+    my ($ctx, $tmpl, $ref_color_roundrobin_idx, $ref_subst) = @_;
 
-    # check if we've got all the info keys necessary to build this graph
-    foreach my $required_key (sort keys(%$ref_infokeys2rrd))
+    while ((my $idx = index($tmpl, '{DEVICE}')) >= $[)
     {
-        unless ($required_key ~~ @$ref_available_info_keys)
+        die unless exists $ref_subst->{DEVICE};
+        substr $tmpl, $idx, 8, $ref_subst->{DEVICE};
+    }
+
+    while ((my $idx = index($tmpl, '{RRDFILE}')) >= $[)
+    {
+        die unless exists $ref_subst->{RRDFILE};
+        substr $tmpl, $idx, 9, $ref_subst->{RRDFILE};
+    }
+
+    while ($tmpl =~ /(\{RRDFILE\:([^\}]+)\})/)
+    {
+        my $match_str = $1;
+        my $name      = $2;
+
+        die unless exists $ref_subst->{rrd_files};
+        die "RRD file not found \"$match_str\"!\n"
+            unless exists $ref_subst->{rrd_files}{$name};
+
+        while ((my $idx = index($tmpl, $match_str)) >= $[)
         {
-            # here, the database does not have all the values we need...
-            foreach (sort keys(%$ref_infokeys2rrd))
-            {
-                unlink($ref_infokeys2rrd->{$_}{rrd_file})
-                    if -e $ref_infokeys2rrd->{$_}{rrd_file};
-            }
-            # TODO: delete graph files
-            return;
+            substr $tmpl, $idx, length($match_str),
+                $ref_subst->{rrd_files}{$name}{file};
         }
     }
 
-    # build/update rrd files
-    foreach my $info_key (sort keys(%$ref_infokeys2rrd))
+    while ($tmpl =~ /(\{COLOR\:([^\}]+)\})/)
     {
-        my $ref_key2rrd = $ref_infokeys2rrd->{$info_key};
-        my $rrd_name    = $ref_key2rrd->{rrd_name};
-        my $rrd_file    = $ref_key2rrd->{rrd_file};
-        my $rrd_step    = $ref_key2rrd->{rrd_tmpl}{step};
+        my $match_str  = $1;
+        my $color_name = $2;
+
+        die "Unknown color \"$color_name\" found in graphic definition!\n"
+            unless exists $ctx->{colors_byname}{$color_name};
+
+        while ((my $idx = index($tmpl, $match_str)) >= $[)
+        {
+            substr $tmpl, $idx, length($match_str),
+                $ctx->{colors_byname}{$color_name};
+        }
+    }
+
+    while ((my $idx = index($tmpl, '{RRCOLOR}')) >= $[)
+    {
+        die unless defined $ref_color_roundrobin_idx;
+        my $coloridx =
+            ($$ref_color_roundrobin_idx)++ % scalar(@{$ctx->{colors_array}});
+        substr $tmpl, $idx, 9, $ctx->{colors_array}[$coloridx];
+    }
+
+    return $tmpl;
+}
+
+
+#-------------------------------------------------------------------------------
+sub db_available_keys
+{
+    my ($ctx, $machine_id, $history_start) = @_;
+
+    my $available_dbkeys = $ctx->{dbh}->selectcol_arrayref(qq{
+        SELECT la.key
+        FROM logatom AS la
+        WHERE la.machine_id = $machine_id
+        AND ( la.unix_first >= $history_start OR la.unix_last >= $history_start )
+        AND ( la.unix_first <= $ctx->{now} OR la.unix_last <= $ctx->{now} )
+        GROUP BY la.key
+        ORDER BY la.id ASC },
+        { Columns => [ 1 ] });
+    #warn "INFO KEYS for machine $machine_id (", scalar(@$available_dbkeys), "):\n", join(', ', sort(@$available_dbkeys)), "\n";
+
+    return $available_dbkeys;
+}
+
+#-------------------------------------------------------------------------------
+sub db2rrd
+{
+    my ($ctx, $machine_id, $ref_rrd_files, $ref_available_dbkeys) = @_;
+
+    # check if we've got all the info keys necessary to build this graph
+    foreach (sort keys(%$ref_rrd_files))
+    {
+        my $required_key = $ref_rrd_files->{$_}{dbkey};
+        return unless $required_key ~~ @$ref_available_dbkeys;
+    }
+
+    # create and/or update rrd files
+    foreach my $rrd_name (sort keys(%$ref_rrd_files))
+    {
+        my $ref_rrd = $ref_rrd_files->{$rrd_name};
 
         # create rrd file or just update it?
-        unless (-e $rrd_file)
+        unless (-e $ref_rrd->{file})
         {
             my $cmd =
-                'rrdtool create "'.$rrd_file.'" '.
-                '--start '.$ref_key2rrd->{rrd_start}.' '.
-                '--step '.$rrd_step.' ';
-            $cmd .= sprintf
-                $ref_key2rrd->{rrd_tmpl}{dsfmt}.' ',
-                $ref_key2rrd->{rrd_name};
-            $cmd .= "$_ "
-                foreach (@{$ref_key2rrd->{rrd_tmpl}{rra}});
+                'rrdtool create "'.$ref_rrd->{file}.'" '.
+                '--start '.($ref_rrd->{start} - 1).' '.
+                '--step '.$ref_rrd->{step}.' '.
+                $ref_rrd->{ds}.' ';
+            $cmd .= "$_ " foreach (@{$ref_rrd->{rras}});
             $cmd .= '2>&1';
             chomp(my @lines = qx/$cmd/);
-            die "Failed to create $rrd_file! Command:\n  ",
+            die "Failed to create $ref_rrd->{file}! Command:\n  ",
                 "$cmd\nOutput:\n  ", join("\n  ", @lines), "\n"
                 unless $? == 0;
         }
@@ -252,7 +383,7 @@ sub rrd_create_and_update
         {
             # the file exists so get the last update timestamp to know
             # from when we have to update it
-            $ref_key2rrd->{rrd_start} = 1 + rrd_last_update($rrd_file);
+            $ref_rrd->{start} = 1 + rrd_file_lastupdate($ref_rrd->{file});
         }
 
         # fetch just enough data from the database and update the rrd file
@@ -262,8 +393,8 @@ sub rrd_create_and_update
                 "SELECT la.id, la.unix_first, la.unix_last, la.value ".
                 "FROM logatom AS la ".
                 "WHERE la.machine_id = $machine_id ".
-                "AND ( la.unix_first >= $ref_key2rrd->{rrd_start} OR la.unix_last >= $ref_key2rrd->{rrd_start} ) ".
-                "AND ( la.unix_first <= $ctx->{now} OR la.unix_last <= $ctx->{now} ) ".
+                "AND ( la.unix_first >= $ref_rrd->{start} OR la.unix_last >= $ref_rrd->{start} ) ".
+                "AND la.unix_first <= $ctx->{now} ".
                 "AND la.key = ? ".
                 "ORDER BY la.id ASC ")
                 or die $ctx->{dbh}->errstr;
@@ -271,7 +402,7 @@ sub rrd_create_and_update
             my $cmdline;
             my $ref_lastrow;
 
-            $sth->bind_param(1, $info_key);
+            $sth->bind_param(1, $ref_rrd->{dbkey});
             $sth->execute or die $sth->errstr;
 
             while (1)
@@ -293,18 +424,18 @@ sub rrd_create_and_update
                 {
                     my %curr = map { $columns[$_] => $rows->[0][$_] } 0..$#columns;
 
-                    $ref_key2rrd->{rrd_start} = $curr{unix_first}
-                        if $ref_key2rrd->{rrd_start} < $curr{unix_first};
+                    $ref_rrd->{start} = $curr{unix_first}
+                        if $ref_rrd->{start} < $curr{unix_first};
 
-                    while ($ref_key2rrd->{rrd_start} < $curr{unix_last}
-                        and $ref_key2rrd->{rrd_start} < $ctx->{now})
+                    while ($ref_rrd->{start} < $curr{unix_last}
+                        and $ref_rrd->{start} < $ctx->{now})
                     {
-                        rrd_update_cmd $rrd_file, $rrd_name, \$cmdline,
-                            $ref_key2rrd->{rrd_start}.':'.$curr{value};
-                        $ref_key2rrd->{rrd_start} += $rrd_step;
+                        rrd_file_update $ref_rrd->{file}, $rrd_name, \$cmdline,
+                            $ref_rrd->{start}.':'.$curr{value};
+                        $ref_rrd->{start} += $ref_rrd->{step};
                     }
 
-                    $ref_key2rrd->{rrd_start} =
+                    $ref_rrd->{start} =
                         ($curr{unix_last} < $ctx->{now}) ?
                         $curr{unix_last} :
                         $ctx->{now};
@@ -318,19 +449,19 @@ sub rrd_create_and_update
                         shift @$rows;
 
                         next if $curr{unix_first} >= $next{unix_first}
-                            or $ref_key2rrd->{rrd_start} >= $next{unix_first};
+                            or $ref_rrd->{start} >= $next{unix_first};
 
-                        $ref_key2rrd->{rrd_start} = $curr{unix_first}
-                            if $ref_key2rrd->{rrd_start} < $curr{unix_first};
+                        $ref_rrd->{start} = $curr{unix_first}
+                            if $ref_rrd->{start} < $curr{unix_first};
 
-                        while ($ref_key2rrd->{rrd_start} < $next{unix_first})
+                        while ($ref_rrd->{start} < $next{unix_first})
                         {
-                            rrd_update_cmd $rrd_file, $rrd_name, \$cmdline,
-                                $ref_key2rrd->{rrd_start}.':'.$curr{value};
-                            $ref_key2rrd->{rrd_start} += $rrd_step;
+                            rrd_file_update $ref_rrd->{file}, $rrd_name, \$cmdline,
+                                $ref_rrd->{start}.':'.$curr{value};
+                            $ref_rrd->{start} += $ref_rrd->{step};
                         }
 
-                        $ref_key2rrd->{rrd_start} = $next{unix_first};
+                        $ref_rrd->{start} = $next{unix_first};
                     }
 
                     $ref_lastrow = (@$rows > 0) ? $rows->[0] : undef;
@@ -338,7 +469,7 @@ sub rrd_create_and_update
             }
 
             # flush data remained in the command line
-            rrd_update_cmd $rrd_file, $rrd_name, \$cmdline, undef, 0;
+            rrd_file_update $ref_rrd->{file}, $rrd_name, \$cmdline, undef, 0;
         }
     }
 }
@@ -346,596 +477,249 @@ sub rrd_create_and_update
 
 
 #-------------------------------------------------------------------------------
-sub graph_usage
+sub generate_graphic_static
 {
-    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my $graph_name    = 'usage';
-    my $graph_title   = 'Usage';
-    my $rrd_file_cpu  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'cpu';
-    my $rrd_file_mem  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'mem';
-    my $rrd_file_swap = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'swap';
-    my %infokeys2rrd = (
-        'cpu.usage' => {
-            rrd_name  => 'cpu',
-            rrd_file  => $rrd_file_cpu,
-            rrd_tmpl  => $RRD_TEMPLATES{percentage_per_minute},
-            rrd_start => $history_start,
-        },
-        'mem.usage' => {
-            rrd_name  => 'mem',
-            rrd_file  => $rrd_file_mem,
-            rrd_tmpl  => $RRD_TEMPLATES{percentage_per_minute},
-            rrd_start => $history_start,
-        },
-        'swap.usage' => {
-            rrd_name  => 'swap',
-            rrd_file  => $rrd_file_swap,
-            rrd_tmpl  => $RRD_TEMPLATES{percentage_per_minute},
-            rrd_start => $history_start,
-        },
-    );
-
-    # create and/or update all the necessary rrd file(s)
-    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
-
-    # do not render graphics if at least one of the rrd files is not up-to-date
-    foreach (sort keys(%infokeys2rrd))
-    {
-        my $f = $infokeys2rrd{$_}{rrd_file};
-        return unless -e $f and rrd_last_update($f) > $history_start;
-    }
-
-    # create graph for each period
-    foreach my $ref_period (@$ref_periods)
-    {
-        my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
-        my $title = "$graph_title / $ref_period->{title}";
-
-        my $cmd =
-            "rrdtool graph \"$file\" ".
-            "--start now-".$ref_period->{days}."d ".
-            "--end now ".
-            "--title \"$title\" ".
-            "--vertical-label \"usage\" ".
-            "--width ".$ref_period->{graph_width}." ".
-            "--height ".$ref_period->{graph_height}." ".
-            "--lower-limit 0 ".
-            "--upper-limit 100 ".
-            #"--rigid ".
-            "--units-exponent 0 ".
-            #"--base 1024 ".
-            "\"DEF:mem=$rrd_file_mem:mem:AVERAGE\" ".
-            "\"DEF:swap=$rrd_file_swap:swap:AVERAGE\" ".
-            "\"DEF:cpu=$rrd_file_cpu:cpu:AVERAGE\" ".
-            "\"AREA:mem#00FFFF:Memory\" ".
-            "\"LINE1:swap#00A0FF:Swap\" ".
-            "\"LINE1:cpu#DC2F2F:CPU\" ";
-        chomp(my @lines = qx/$cmd 2>&1/);
-        die "Failed to generate $file! Command: $cmd\n",
-            "Output:\n  ", join("\n  ", @lines), "\n"
-            unless $? == 0;
-    }
-}
-
-#-------------------------------------------------------------------------------
-sub graph_load
-{
-    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my $graph_name         = 'load';
-    my $graph_title        = 'Load';
-    my $rrd_file_loadavg1  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'loadavg1';
-    my $rrd_file_loadavg5  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'loadavg5';
-    my $rrd_file_loadavg15 = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'loadavg15';
-    my %infokeys2rrd = (
-        'ps.loadavg1' => {
-            rrd_name  => 'loadavg1',
-            rrd_file  => $rrd_file_loadavg1,
-            rrd_tmpl  => $RRD_TEMPLATES{absvalue_per_minute},
-            rrd_start => $history_start,
-        },
-        'ps.loadavg5' => {
-            rrd_name  => 'loadavg5',
-            rrd_file  => $rrd_file_loadavg5,
-            rrd_tmpl  => $RRD_TEMPLATES{absvalue_per_minute},
-            rrd_start => $history_start,
-        },
-        'ps.loadavg15' => {
-            rrd_name  => 'loadavg15',
-            rrd_file  => $rrd_file_loadavg15,
-            rrd_tmpl  => $RRD_TEMPLATES{absvalue_per_minute},
-            rrd_start => $history_start,
-        },
-    );
-
-    # create and/or update all the necessary rrd file(s)
-    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
-
-    # do not render graphics if at least one of the rrd files is not up-to-date
-    foreach (sort keys(%infokeys2rrd))
-    {
-        my $f = $infokeys2rrd{$_}{rrd_file};
-        return unless -e $f and rrd_last_update($f) > $history_start;
-    }
-
-    # create graph for each period
-    foreach my $ref_period (@$ref_periods)
-    {
-        my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
-        my $title = "$graph_title / $ref_period->{title}";
-
-        my $cmd =
-            "rrdtool graph \"$file\" ".
-            "--start now-".$ref_period->{days}."d ".
-            "--end now ".
-            "--title \"$title\" ".
-            "--vertical-label \"usage\" ".
-            "--width ".$ref_period->{graph_width}." ".
-            "--height ".$ref_period->{graph_height}." ".
-            "--lower-limit 0 ".
-            #"--upper-limit 100 ".
-            #"--rigid ".
-            "--units-exponent 0 ".
-            #"--base 1024 ".
-            "\"DEF:loadavg15=$rrd_file_loadavg15:loadavg15:AVERAGE\" ".
-            "\"DEF:loadavg5=$rrd_file_loadavg5:loadavg5:AVERAGE\" ".
-            "\"DEF:loadavg1=$rrd_file_loadavg1:loadavg1:AVERAGE\" ".
-            "\"AREA:loadavg15#00FFFF:Average 15min\" ".
-            "\"LINE1:loadavg5#00A0FF:Average 5min\" ".
-            "\"LINE1:loadavg1#0019A6:Average 1min\" ";
-        chomp(my @lines = qx/$cmd 2>&1/);
-        die "Failed to generate $file! Command: $cmd\n",
-            "Output:\n  ", join("\n  ", @lines), "\n"
-            unless $? == 0;
-    }
-}
-
-#-------------------------------------------------------------------------------
-sub graph_net
-{
-    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my @netifs;
-    my %infokeys2rrd;
-
-    sub _netif2rrdname { my $n = shift(); $n =~ s%[^\dA-Za-z]%_%g; $n; }
-    sub _netif2rrdfile {
-        my ($dir, $mid, $netif_name, $inout) = @_;
-        rrd_file_path $dir, $mid, 'net', $netif_name.'-'.$inout;
-    }
-
-    # list available network interfaces
-    {
-        # perl *rulez*!
-        my $regex = qr/net\.([^\.]+)\.bytes\.(in|out)$/;
-        my %matches =
-            map { /$regex/; $1 => 1 }
-            grep(/$regex/, @$ref_available_info_keys);
-        @netifs = sort keys(%matches);
-    }
-
-    # populate %infokeys2rrd
-    foreach my $netif (@netifs)
-    {
-        my $netif_name = _netif2rrdname $netif;
-        foreach my $inout (qw( in out ))
-        {
-            $infokeys2rrd{"net.$netif.bytes.$inout"} = {
-                rrd_name  => $netif_name.$inout,
-                rrd_file  => _netif2rrdfile($ctx->{dir_rrd}, $machine_id, $netif_name, $inout),
-                rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-                rrd_start => $history_start,
-            };
-        }
-    }
-
-    # create and/or update all the necessary rrd file(s)
-    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
-
-    # do not render graphics if at least one of the rrd files is not up-to-date
-    foreach (sort keys(%infokeys2rrd))
-    {
-        my $f = $infokeys2rrd{$_}{rrd_file};
-        return unless -e $f and rrd_last_update($f) > $history_start;
-    }
-
-    # create graph for each interface and each period
-    foreach my $netif (@netifs)
-    {
-        my $netif_name  = _netif2rrdname $netif;
-        my $rrdfile_in  = _netif2rrdfile($ctx->{dir_rrd}, $machine_id, $netif_name, 'in');
-        my $rrdfile_out = _netif2rrdfile($ctx->{dir_rrd}, $machine_id, $netif_name, 'out');
-
-        foreach my $ref_period (@$ref_periods)
-        {
-            my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-net-$netif_name-$ref_period->{name}.png";
-            my $title = "$netif throughput / $ref_period->{title}";
-
-            my $cmd =
-                "rrdtool graph \"$file\" ".
-                "--start now-".$ref_period->{days}."d ".
-                "--end now ".
-                "--title \"$title\" ".
-                "--vertical-label \"bytes/s\" ".
-                "--width ".$ref_period->{graph_width}." ".
-                "--height ".$ref_period->{graph_height}." ".
-                "--lower-limit 0 ".
-                #"--upper-limit 100 ".
-                #"--rigid ".
-                #"--units-exponent 0 ".
-                #"--base 1024 ".
-                "\"DEF:in=$rrdfile_in:${netif_name}in:AVERAGE\" ".
-                "\"DEF:out=$rrdfile_out:${netif_name}out:AVERAGE\" ".
-                "\"LINE1:in#AEE39E:In\" ".
-                "\"LINE1:out#DC2F2F:Out\" ";
-            chomp(my @lines = qx/$cmd 2>&1/);
-            die "Failed to generate $file! Command: $cmd\n",
-                "Output:\n  ", join("\n  ", @lines), "\n"
-                unless $? == 0;
-        }
-    }
-}
-
-#-------------------------------------------------------------------------------
-sub graph_storage_access
-{
-    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my @devices;
-    my %infokeys2rrd;
-    my %mount_points;
-
-    sub _device2rrdname { my $n = shift(); $n =~ s%[^\dA-Za-z]%_%g; $n; }
-    sub _device2rrdfile {
-        my ($dir, $mid, $device_name, $rw) = @_;
-        rrd_file_path $dir, $mid, 'storaccess', $device_name.'-'.$rw;
-    }
-
-    # list available storage devices
-    {
-        # perl *rulez*!
-        my $regex = qr/^((hdd|mnt)\.[^\.]+)\.bytes\.[rw]$/;
-        my %matches =
-            map { /$regex/; $1 => 1 }
-            grep(/$regex/, @$ref_available_info_keys);
-        @devices = sort keys(%matches);
-    }
-
-    # populate %infokeys2rrd
-    foreach my $half_key (@devices)
-    {
-        my ($storage_type, $device) = split /\./, $half_key; # split "mnt.hda1"
-        my $device_name = _device2rrdname $device;
-
-        foreach my $rw (qw( r w ))
-        {
-            $infokeys2rrd{"$storage_type.$device.bytes.$rw"} = {
-                rrd_name  => $device_name.$rw,
-                rrd_file  => _device2rrdfile($ctx->{dir_rrd}, $machine_id, $device_name, $rw),
-                rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-                rrd_start => $history_start,
-            };
-        }
-    }
-
-    # create and/or update all the necessary rrd file(s)
-    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
-
-    # do not render graphics if at least one of the rrd files is not up-to-date
-    foreach (sort keys(%infokeys2rrd))
-    {
-        my $f = $infokeys2rrd{$_}{rrd_file};
-        return unless -e $f and rrd_last_update($f) > $history_start;
-    }
-
-    # fetch mount points from the database
-    foreach my $half_key (@devices)
-    {
-        my ($storage_type, $device) = split /\./, $half_key; # split "mnt.hda1"
-        next unless $storage_type eq 'mnt';
-        next if exists $mount_points{$device};
-        my $rows = $ctx->{dbh}->selectall_arrayref(
-            "SELECT la.value ".
-            "FROM logatom AS la ".
-            "WHERE machine_id = $machine_id ".
-            "AND la.key = ".$ctx->{dbh}->quote("mnt.$device.point")." ".
-            "ORDER BY la.id DESC ".
-            "LIMIT 1 ");
-        $mount_points{$device} =
-            (defined($rows) and @$rows == 1) ?
-            $rows->[0][0] :
-            'swap'; # we could not find its root name, so this is probably a swap partition
-    }
-
-    # create graph for each interface and each period
-    foreach my $half_key (@devices)
-    {
-        my ($storage_type, $device) = split /\./, $half_key; # split "mnt.hda1"
-        my $device_name   = _device2rrdname $device;
-        my $rrdfile_read  = _device2rrdfile($ctx->{dir_rrd}, $machine_id, $device_name, 'r');
-        my $rrdfile_write = _device2rrdfile($ctx->{dir_rrd}, $machine_id, $device_name, 'w');
-
-        foreach my $ref_period (@$ref_periods)
-        {
-            my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-storaccess-$device_name-$ref_period->{name}.png";
-            my $mntpt =
-                exists($mount_points{$device}) ?
-                "($mount_points{$device}) " : '';
-            my $title = "$device throughput $mntpt/ $ref_period->{title}";
-
-            my $cmd =
-                "rrdtool graph \"$file\" ".
-                "--start now-".$ref_period->{days}."d ".
-                "--end now ".
-                "--title \"$title\" ".
-                "--vertical-label \"bytes/s\" ".
-                "--width ".$ref_period->{graph_width}." ".
-                "--height ".$ref_period->{graph_height}." ".
-                "--lower-limit 0 ".
-                #"--upper-limit 100 ".
-                #"--rigid ".
-                #"--units-exponent 0 ".
-                #"--base 1024 ".
-                "\"DEF:read=$rrdfile_read:${device_name}r:AVERAGE\" ".
-                "\"DEF:write=$rrdfile_write:${device_name}w:AVERAGE\" ".
-                "\"LINE1:read#AEE39E:Read\" ".
-                "\"LINE1:write#DC2F2F:Write\" ";
-            chomp(my @lines = qx/$cmd 2>&1/);
-            die "Failed to generate $file! Command: $cmd\n",
-                "Output:\n  ", join("\n  ", @lines), "\n"
-                unless $? == 0;
-        }
-    }
-}
-
-#-------------------------------------------------------------------------------
-sub graph_named
-{
-    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my $graph_name      = 'named';
-    my $graph_title     = 'Bind9';
-    my $rrd_file_reqin  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'named', 'req-in';
-    my $rrd_file_reqout = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'named', 'req-out';
-    my %infokeys2rrd = (
-        'named.req.in' => {
-            rrd_name  => 'reqin',
-            rrd_file  => $rrd_file_reqin,
-            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-            rrd_start => $history_start,
-        },
-        'named.req.out' => {
-            rrd_name  => 'reqout',
-            rrd_file  => $rrd_file_reqout,
-            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-            rrd_start => $history_start,
-        },
-    );
-
-    # create and/or update all the necessary rrd file(s)
-    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
-
-    # do not render graphics if at least one of the rrd files is not up-to-date
-    foreach (sort keys(%infokeys2rrd))
-    {
-        my $f = $infokeys2rrd{$_}{rrd_file};
-        return unless -e $f and rrd_last_update($f) > $history_start;
-    }
-
-    # create graph for each period
-    foreach my $ref_period (@$ref_periods)
-    {
-        my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
-        my $title = "$graph_title / $ref_period->{title}";
-
-        my $cmd =
-            "rrdtool graph \"$file\" ".
-            "--start now-".$ref_period->{days}."d ".
-            "--end now ".
-            "--title \"$title\" ".
-            "--vertical-label \"requests/s\" ".
-            "--width ".$ref_period->{graph_width}." ".
-            "--height ".$ref_period->{graph_height}." ".
-            "--lower-limit 0 ".
-            #"--upper-limit 100 ".
-            #"--rigid ".
-            #"--units-exponent 0 ".
-            #"--base 1024 ".
-            "\"DEF:reqin=$rrd_file_reqin:reqin:AVERAGE\" ".
-            "\"DEF:reqout=$rrd_file_reqout:reqout:AVERAGE\" ".
-            "\"LINE1:reqin#AEE39E:Incoming Requests\" ".
-            "\"LINE1:reqout#DC2F2F:Outgoing Queries\" ";
-        chomp(my @lines = qx/$cmd 2>&1/);
-        die "Failed to generate $file! Command: $cmd\n",
-            "Output:\n  ", join("\n  ", @lines), "\n"
-            unless $? == 0;
-    }
-}
-
-#-------------------------------------------------------------------------------
-sub graph_apache
-{
-    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my $graph_name     = 'apache';
-    my $graph_title    = 'Apache';
-    my $rrd_file_hits  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'apache', 'hits';
-    my $rrd_file_bytes = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'apache', 'bytes';
-    my %infokeys2rrd = (
-        'apache.hits' => {
-            rrd_name  => 'hits',
-            rrd_file  => $rrd_file_hits,
-            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-            rrd_start => $history_start,
-        },
-        'apache.bytes' => {
-            rrd_name  => 'bytes',
-            rrd_file  => $rrd_file_bytes,
-            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-            rrd_start => $history_start,
-        },
-    );
-
-    # create and/or update all the necessary rrd file(s)
-    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
-
-    # do not render graphics if at least one of the rrd files is not up-to-date
-    foreach (sort keys(%infokeys2rrd))
-    {
-        my $f = $infokeys2rrd{$_}{rrd_file};
-        return unless -e $f and rrd_last_update($f) > $history_start;
-    }
-
-    # create graph for each period
-    foreach my $ref_period (@$ref_periods)
-    {
-        my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
-        my $title = "$graph_title / $ref_period->{title}";
-
-        my $cmd =
-            "rrdtool graph \"$file\" ".
-            "--start now-".$ref_period->{days}."d ".
-            "--end now ".
-            "--title \"$title\" ".
-           #"--vertical-label \"requests/s\" ".
-            "--width ".$ref_period->{graph_width}." ".
-            "--height ".$ref_period->{graph_height}." ".
-            "--lower-limit 0 ".
-            #"--upper-limit 100 ".
-            #"--rigid ".
-            #"--units-exponent 0 ".
-            #"--base 1024 ".
-            "\"DEF:hits=$rrd_file_hits:hits:AVERAGE\" ".
-            "\"DEF:bytes=$rrd_file_bytes:bytes:AVERAGE\" ".
-            "\"LINE1:hits#00FFFF:Hits/s\" ".
-            "\"LINE1:bytes#00A0FF:Bytes/s\" ";
-        chomp(my @lines = qx/$cmd 2>&1/);
-        die "Failed to generate $file! Command: $cmd\n",
-            "Output:\n  ", join("\n  ", @lines), "\n"
-            unless $? == 0;
-    }
-}
-
-#-------------------------------------------------------------------------------
-sub graph_lighttpd
-{
-    my ($ctx, $ref_available_info_keys, $machine_id, $history_start, $ref_periods) = @_;
-    my $graph_name     = 'lighttpd';
-    my $graph_title    = 'LigHTTPD';
-    my $rrd_file_hits  = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'lighttpd', 'hits';
-    my $rrd_file_bytes = rrd_file_path $ctx->{dir_rrd}, $machine_id, 'lighttpd', 'bytes';
-    my %infokeys2rrd = (
-        'lighttpd.hits' => {
-            rrd_name  => 'hits',
-            rrd_file  => $rrd_file_hits,
-            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-            rrd_start => $history_start,
-        },
-        'lighttpd.bytes' => {
-            rrd_name  => 'bytes',
-            rrd_file  => $rrd_file_bytes,
-            rrd_tmpl  => $RRD_TEMPLATES{abscounter_per_minute},
-            rrd_start => $history_start,
-        },
-    );
-
-    # create and/or update all the necessary rrd file(s)
-    rrd_create_and_update $ctx, $ref_available_info_keys, $machine_id, \%infokeys2rrd;
-
-    # do not render graphics if at least one of the rrd files is not up-to-date
-    foreach (sort keys(%infokeys2rrd))
-    {
-        my $f = $infokeys2rrd{$_}{rrd_file};
-        return unless -e $f and rrd_last_update($f) > $history_start;
-    }
-
-    # create graph for each period
-    foreach my $ref_period (@$ref_periods)
-    {
-        my $file  = $ctx->{dir_htdocs}."/graph-$machine_id-$graph_name-$ref_period->{name}.png";
-        my $title = "$graph_title / $ref_period->{title}";
-
-        my $cmd =
-            "rrdtool graph \"$file\" ".
-            "--start now-".$ref_period->{days}."d ".
-            "--end now ".
-            "--title \"$title\" ".
-           #"--vertical-label \"requests/s\" ".
-            "--width ".$ref_period->{graph_width}." ".
-            "--height ".$ref_period->{graph_height}." ".
-            "--lower-limit 0 ".
-            #"--upper-limit 100 ".
-            #"--rigid ".
-            #"--units-exponent 0 ".
-            #"--base 1024 ".
-            "\"DEF:hits=$rrd_file_hits:hits:AVERAGE\" ".
-            "\"DEF:bytes=$rrd_file_bytes:bytes:AVERAGE\" ".
-            "\"LINE1:hits#00FFFF:Hits/s\" ".
-            "\"LINE1:bytes#00A0FF:Bytes/s\" ";
-        chomp(my @lines = qx/$cmd 2>&1/);
-        die "Failed to generate $file! Command: $cmd\n",
-            "Output:\n  ", join("\n  ", @lines), "\n"
-            unless $? == 0;
-    }
-}
-
-
-
-#-------------------------------------------------------------------------------
-sub generate_graphs
-{
-    my ($ctx, $machine_id) = @_;
-    my $ref_machine = $ctx->{machines}{$machine_id};
-    my $year_ago    = $ctx->{now} - (365 * 86400);
-    my $today_str   = today_str $ctx->{now};
-    my $available_info_keys;
+    my ($ctx, $machine_id, $ref_graphdef, $available_dbkeys) = @_;
+    my $max_days      = List::Util::max(@{$ref_graphdef->{periods}});
+    my $history_start = $ctx->{now} - ($max_days * 86400);
+    my %rrd_files;
 
     # list all the info keys available within the desired period
-    $available_info_keys = $ctx->{dbh}->selectcol_arrayref(qq{
-        SELECT la.key
-        FROM logatom AS la
-        WHERE la.machine_id = $machine_id
-        AND ( la.unix_first >= $year_ago OR la.unix_last >= $year_ago )
-        AND ( la.unix_first <= $ctx->{now} OR la.unix_last <= $ctx->{now} )
-        GROUP BY la.key
-        ORDER BY la.id ASC },
-        { Columns => [ 1 ] });
-    #warn "INFO KEYS for machine $machine_id (", scalar(@$available_info_keys), "):\n", join(', ', sort(@$available_info_keys)), "\n";
+    $available_dbkeys = db_available_keys($ctx, $machine_id, $history_start)
+        unless defined $available_dbkeys;
 
-    # generate graphs
-    my @periods = (
+    # in order to be able to generate graphics, we first need to create rrd
+    # files and we must ensure we have all the required data into the database.
+    foreach my $ref_rrd_value (@{$ref_graphdef->{values}})
+    {
+        my $rrd_name    = $ref_rrd_value->{name};
+        my $rrd_file    = rrd_file_path $ctx->{dir_rrd}, $machine_id, $rrd_name;
+        my $rra_profile = RRA_PROFILES()->{$ref_rrd_value->{rra_profile}};
+        my $rrd_ds      = sprintf
+            RRD_PROFILES()->{$ref_rrd_value->{rrd_profile}},
+            $rrd_name, $rra_profile->{heartbeat};
+
+        $rrd_files{$rrd_name} = {
+            file  => $rrd_file,
+            dbkey => $ref_rrd_value->{dbkey},
+            step  => $rra_profile->{step},
+            ds    => $rrd_ds,
+            rras  => $rra_profile->{definitions},
+            start => $history_start,
+        };
+    }
+    db2rrd $ctx, $machine_id, \%rrd_files, $available_dbkeys;
+
+    # do not render graphics if at least one of the rrd files is not up-to-date
+    foreach (sort keys(%rrd_files))
+    {
+        my $f = $rrd_files{$_}{file};
+        return unless -e $f and rrd_file_lastupdate($f) > $history_start;
+    }
+
+    # create graph for each period
+    foreach my $days (@{$ref_graphdef->{periods}})
+    {
+        my $ref_period  = PERIODS()->{$days};
+        my $graph_file  = $ctx->{dir_htdocs}."/graph-$machine_id-$ref_graphdef->{name}-$ref_period->{name}.png";
+        my $graph_title = sprintf '%s / %s / %s (%s)',
+            $ctx->{machines}{$machine_id}{name}, $ref_graphdef->{label},
+            $ctx->{today_str}, $ref_period->{label};
+        my $color_roundrobin_idx = 0;
+
+        my $cmd =
+            "rrdtool graph \"$graph_file\" ".
+            "--start ".($ctx->{now} - ($days * 86400))." ".
+            "--end $ctx->{now} ".
+            "--title \"$graph_title\" ".
+            "--width $ref_period->{graph_width} ".
+            "--height $ref_period->{graph_height} ";
+
+        $cmd .= /^([^\s]+)\s(.*)$/ ? "$1 \"$2\" " : $_
+            foreach (@{$ref_graphdef->{rrd_graph_options}});
+
+        foreach my $arg (@{$ref_graphdef->{rrd_graph_def}}, @{$ref_graphdef->{rrd_graph_draw}})
         {
-            name         => 'day',
-            days         => 1,
-            title        => "$ref_machine->{name} / $today_str",
-            graph_width  => 500,
-            graph_height => 100,
-        },
+            $arg = graphdef_template $ctx, $arg, \$color_roundrobin_idx,
+                { rrd_files => \%rrd_files };
+            $cmd .= "\"$arg\" ";
+        }
+
+        chomp(my @lines = qx/$cmd 2>&1/);
+        die "Failed to generate $graph_file! Command: $cmd\n",
+            "Output:\n  ", join("\n  ", @lines), "\n"
+            unless $? == 0;
+    }
+}
+
+#-------------------------------------------------------------------------------
+sub generate_graphic_dynamic
+{
+    my ($ctx, $machine_id, $ref_graphdef, $available_dbkeys) = @_;
+    my $max_days      = List::Util::max(@{$ref_graphdef->{periods}});
+    my $history_start = $ctx->{now} - ($max_days * 86400);
+    my @devices;
+
+    # list all the info keys available within the desired period
+    $available_dbkeys = db_available_keys($ctx, $machine_id, $history_start)
+        unless defined $available_dbkeys;
+
+    # list available devices
+    {
+        # perl rulez!
+        my $regex   = $ref_graphdef->{vname};
+        my %matches = map { /$regex/; $1 => 1 } grep(/$regex/, @$available_dbkeys);
+        @devices    = sort keys(%matches);
+    }
+
+    # generate the desired graph for each device found
+    foreach my $device (@devices)
+    {
+        my $color_roundrobin_idx = 0;
+        my %static_graphdef = (
+            name              => $ref_graphdef->{name}.'-'.$device,
+            type              => GRAPHDEFINITION_STATIC,
+            periods           => [ @{$ref_graphdef->{periods}} ],
+            label             => graphdef_template($ctx, $ref_graphdef->{label}, undef, { DEVICE => $device }),
+            values            => [ ],
+            rrd_graph_options => [ @{$ref_graphdef->{rrd_graph_options}} ],
+            rrd_graph_def     => [ @{$ref_graphdef->{rrd_graph_def}} ],
+            rrd_graph_draw    => [ @{$ref_graphdef->{rrd_graph_draw}} ],
+        );
+
+        foreach my $ref_valdef (@{$ref_graphdef->{values}})
         {
-            name         => 'week',
-            days         => 7,
-            title        => "$ref_machine->{name} / $today_str / Week",
-            graph_width  => 500,
-            graph_height => 100,
-        },
-        {
-            name         => 'month',
-            days         => 30,
-            title        => "$ref_machine->{name} / $today_str / Month",
-            graph_width  => 1000,
-            graph_height => 60,
-        },
-        {
-            name         => 'year',
-            days         => 365,
-            title        => "$ref_machine->{name} / $today_str / Year",
-            graph_width  => 1000,
-            graph_height => 60,
-        },
+            my $ref_static_valdef = {
+                rrd_profile => $ref_valdef->{rrd_profile},
+                rra_profile => $ref_valdef->{rra_profile},
+            };
+            my $rrd_file;
+
+            foreach my $k (qw( name dbkey ))
+            {
+                $ref_static_valdef->{$k} = graphdef_template
+                    $ctx, $ref_valdef->{$k}, \$color_roundrobin_idx,
+                    { DEVICE => $device };
+            }
+            $rrd_file = rrd_file_path $ctx->{dir_rrd}, $machine_id, $ref_static_valdef->{name};
+
+            my %hmap = (
+                rrg_def  => 'rrd_graph_def',
+                rrg_draw => 'rrd_graph_draw',
+            );
+            while (my ($srck, $dstk) = each %hmap)
+            {
+                foreach my $def (@{$ref_valdef->{$srck}})
+                {
+                    push @{$static_graphdef{$dstk}}, graphdef_template(
+                        $ctx, $def, \$color_roundrobin_idx, {
+                            DEVICE  => $device,
+                            RRDFILE => $rrd_file,
+                        });
+                }
+            }
+
+            push @{$static_graphdef{values}}, $ref_static_valdef;
+        }
+
+        generate_graphic_static $ctx, $machine_id, \%static_graphdef, $available_dbkeys;
+    }
+}
+
+#-------------------------------------------------------------------------------
+sub generate_graphic_dynamic_onegraph
+{
+    my ($ctx, $machine_id, $ref_graphdef, $available_dbkeys) = @_;
+    my $max_days      = List::Util::max(@{$ref_graphdef->{periods}});
+    my $history_start = $ctx->{now} - ($max_days * 86400);
+    my @devices;
+    my %static_graphdef;
+    my $color_roundrobin_idx = 0;
+
+    # list all the info keys available within the desired period
+    $available_dbkeys = db_available_keys($ctx, $machine_id, $history_start)
+        unless defined $available_dbkeys;
+
+    # list available devices
+    {
+        # perl rulez!
+        my $regex   = $ref_graphdef->{vname};
+        my %matches = map { /$regex/; $1 => 1 } grep(/$regex/, @$available_dbkeys);
+        @devices    = sort keys(%matches);
+    }
+
+    # prepare the static definition to generate only one graphic for every devices
+    %static_graphdef = (
+        name              => $ref_graphdef->{name},
+        type              => GRAPHDEFINITION_STATIC,
+        periods           => [ @{$ref_graphdef->{periods}} ],
+        label             => $ref_graphdef->{label},
+        values            => [ ],
+        rrd_graph_options => [ @{$ref_graphdef->{rrd_graph_options}} ],
+        rrd_graph_def     => [ @{$ref_graphdef->{rrd_graph_def}} ],
+        rrd_graph_draw    => [ @{$ref_graphdef->{rrd_graph_draw}} ],
     );
-    main->can("graph_$_")->($ctx, $available_info_keys, $machine_id, $year_ago, \@periods)
-        foreach (qw( usage load net storage_access named apache lighttpd ));
+    foreach my $device (@devices)
+    {
+        foreach my $ref_valdef (@{$ref_graphdef->{values}})
+        {
+            my $ref_static_valdef = {
+                rrd_profile => $ref_valdef->{rrd_profile},
+                rra_profile => $ref_valdef->{rra_profile},
+            };
+            my $rrd_file;
+
+            foreach my $k (qw( name dbkey ))
+            {
+                $ref_static_valdef->{$k} = graphdef_template
+                    $ctx, $ref_valdef->{$k}, \$color_roundrobin_idx,
+                    { DEVICE => $device };
+            }
+            $rrd_file = rrd_file_path $ctx->{dir_rrd}, $machine_id, $ref_static_valdef->{name};
+
+            my %hmap = (
+                rrg_def  => 'rrd_graph_def',
+                rrg_draw => 'rrd_graph_draw',
+            );
+            while (my ($srck, $dstk) = each %hmap)
+            {
+                foreach my $def (@{$ref_valdef->{$srck}})
+                {
+                    push @{$static_graphdef{$dstk}}, graphdef_template(
+                        $ctx, $def, \$color_roundrobin_idx, {
+                            DEVICE  => $device,
+                            RRDFILE => $rrd_file,
+                        });
+                }
+            }
+
+            push @{$static_graphdef{values}}, $ref_static_valdef;
+        }
+    }
+
+    generate_graphic_static $ctx, $machine_id, \%static_graphdef, $available_dbkeys;
+}
+
+
+
+#-------------------------------------------------------------------------------
+sub generate_machine_graphics
+{
+    my ($ctx, $machine_id) = @_;
+
+    foreach my $ref_graphdef (@{$ctx->{graphdef}{GRAPHICS}})
+    {
+        my $func_gengraph = main->can('generate_graphic_'.$ref_graphdef->{type});
+        die unless defined $func_gengraph;
+        $func_gengraph->($ctx, $machine_id, $ref_graphdef);
+    }
 }
 
 #-------------------------------------------------------------------------------
 my %ctx = ( # global context
-    help       => undef,
-    configfile => DEFAULT_CONFIG_FILE,
+    help         => undef,
+    configfile   => DEFAULT_CONFIG_FILE,
+    graphdeffile => undef,
 
     db_source  => undef,
     db_user    => undef,
@@ -945,18 +729,26 @@ my %ctx = ( # global context
     dir_rrd    => DEFAULT_RRD_DIR,
     dir_htdocs => DEFAULT_HTDOCS_DIR,
 
-    now      => time,
-    dbh      => undef,
-    machines => { },
+    now       => time,
+    today_str => undef,
+    dbh       => undef,
+    machines  => { },
+
+    graphdef      => { },
+    colors_byname => { },
+    colors_array  => [ ],
 );
 my $res;
 
 BEGIN { $| = 1; }
 
+$ctx{today_str} = date_str $ctx{now};
+
 # parse parameters
 $res = Getopt::Long::GetOptions(
-    'help|h|?' => \$ctx{help},
-    'config=s' => \$ctx{configfile},
+    'help|h|?'   => \$ctx{help},
+    'config=s'   => \$ctx{configfile},
+    'graphdef=s' => \$ctx{graphdeffile},
 );
 usage unless $res and not $ctx{help};
 
@@ -979,6 +771,52 @@ usage unless $res and not $ctx{help};
         and defined($ctx{db_pass});
 }
 
+# load graphics definitions
+if (defined $ctx{graphdeffile})
+{
+    no strict 'refs';
+
+    die "Graphics definitions file is not readable \"$ctx{graphdeffile}\"!\n"
+      unless -r $ctx{graphdeffile} and -f $ctx{graphdeffile};
+
+    eval "require '$ctx{graphdeffile}';";
+    $@ and $_=$@, s/Compilation failed.*//s, die $_;
+
+    die "Invalid graphics definitions file \"$ctx{graphdeffile}\"!"
+      unless keys(%{__PACKAGE__.'::USER_GRAPHICS_DEFINITIONS'}) > 0;
+
+    $ctx{graphdef} = { %{__PACKAGE__.'::USER_GRAPHICS_DEFINITIONS'} };
+
+    # 'unload' module
+    %{__PACKAGE__.'::USER_GRAPHICS_DEFINITIONS'} = ( );
+    delete $INC{$ctx{graphdeffile}};
+}
+else
+{
+    no strict 'refs';
+
+    eval "require PMon::GraphDefConf;";
+    die $@ if $@;
+    $ctx{graphdef} = { %{__PACKAGE__.'::USER_GRAPHICS_DEFINITIONS'} };
+
+    %{__PACKAGE__.'::USER_GRAPHICS_DEFINITIONS'} = ( );
+    delete $INC{'PMon/GraphDefConf.pm'};
+}
+
+# populate colors hash and array
+# * we will need to access color values by name, but also by index (RRCOLOR).
+# * because of this, it is important to keep track of the order the colors have
+#   been defined by the user. we cannot do that using only a hash since keys'
+#   ordering is unpredictible.
+# * this is why $ctx{graphdef}{COLORS} is a reference to an ARRAY, but has been
+#   defined like a HASH (key=>value pairs).
+$ctx{colors_byname} = { @{$ctx{graphdef}{COLORS}} };
+for ($res = 1; $res < scalar(@{$ctx{graphdef}{COLORS}}); $res += 2)
+{
+    push @{$ctx{colors_array}}, $ctx{graphdef}{COLORS}[$res];
+}
+delete $ctx{graphdef}{COLORS}; # we have our own hash and array, we don't need this anymore
+
 # connect to database
 $ctx{dbh} = DBI->connect(
     $ctx{db_source}, $ctx{db_user}, $ctx{db_pass}, {
@@ -996,7 +834,7 @@ $ctx{machines} = $ctx{dbh}->selectall_hashref(
 die "No machines found in DB!\n" unless keys(%{$ctx{machines}}) > 0;
 
 # generate as much graphs as we can for every machines
-generate_graphs(\%ctx, $_)
+generate_machine_graphics(\%ctx, $_)
     foreach (sort keys(%{$ctx{machines}}));
 
 # free and quit
