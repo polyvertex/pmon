@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------------------
 # Useful SQL requests
 #-------------------------------------------------------------------------------
-# list the number of different known keys
+# list all keys
 SELECT la.key
 FROM logatom AS la
 GROUP BY la.key
