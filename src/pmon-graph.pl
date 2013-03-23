@@ -221,12 +221,13 @@ sub rrd_str2name
 #-------------------------------------------------------------------------------
 sub rrd_file_path
 {
-    my ($dir, $machine_id, $name) = @_;
+    my ($dir, $machine_id, $name, $subname) = @_;
 
     die unless $machine_id =~ /^\d+$/;
-    die unless $name =~ /^[\w\-]+$/;
+    die unless $name       =~ /^[\w\-]+$/;
+    die unless $subname    =~ /^[\w\-]+$/;
 
-    return "$dir/rrd-$machine_id-$name.rrd";
+    return "$dir/rrd-$machine_id-$name-$subname.rrd";
 }
 
 #-------------------------------------------------------------------------------
@@ -493,7 +494,7 @@ sub generate_graphic_static
     foreach my $ref_rrd_value (@{$ref_graphdef->{values}})
     {
         my $rrd_name    = $ref_rrd_value->{name};
-        my $rrd_file    = rrd_file_path $ctx->{dir_rrd}, $machine_id, $rrd_name;
+        my $rrd_file    = rrd_file_path $ctx->{dir_rrd}, $machine_id, $ref_graphdef->{name}, $rrd_name;
         my $rra_profile = RRA_PROFILES()->{$ref_rrd_value->{rra_profile}};
         my $rrd_ds      = sprintf
             RRD_PROFILES()->{$ref_rrd_value->{rrd_profile}},
@@ -577,7 +578,7 @@ sub generate_graphic_dynamic
     {
         my $color_roundrobin_idx = 0;
         my %static_graphdef = (
-            name              => $ref_graphdef->{name}.'-'.$device,
+            name              => $ref_graphdef->{name},
             type              => GRAPHDEFINITION_STATIC,
             periods           => [ @{$ref_graphdef->{periods}} ],
             label             => graphdef_template($ctx, $ref_graphdef->{label}, undef, { DEVICE => $device }),
@@ -601,7 +602,7 @@ sub generate_graphic_dynamic
                     $ctx, $ref_valdef->{$k}, \$color_roundrobin_idx,
                     { DEVICE => $device };
             }
-            $rrd_file = rrd_file_path $ctx->{dir_rrd}, $machine_id, $ref_static_valdef->{name};
+            $rrd_file = rrd_file_path $ctx->{dir_rrd}, $machine_id, $ref_graphdef->{name}, $ref_static_valdef->{name};
 
             my %hmap = (
                 rrg_def  => 'rrd_graph_def',
@@ -675,7 +676,7 @@ sub generate_graphic_dynamic_onegraph
                     $ctx, $ref_valdef->{$k}, \$color_roundrobin_idx,
                     { DEVICE => $device };
             }
-            $rrd_file = rrd_file_path $ctx->{dir_rrd}, $machine_id, $ref_static_valdef->{name};
+            $rrd_file = rrd_file_path $ctx->{dir_rrd}, $machine_id, $ref_graphdef->{name}, $ref_static_valdef->{name};
 
             my %hmap = (
                 rrg_def  => 'rrd_graph_def',
