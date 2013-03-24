@@ -10,6 +10,7 @@ use strict;
 use warnings;
 
 use FindBin ();
+use Cwd ();
 use File::Basename ();
 use List::Util ();
 use Getopt::Long ();
@@ -154,6 +155,15 @@ sub dbg_dump
 {
     require Data::Dumper;
     warn Data::Dumper::Dumper(shift()), "\n";
+}
+
+#-------------------------------------------------------------------------------
+sub path_title
+{
+    # returns the basename minux the suffixes
+    # example: "/foo/bar/archive.tar.gz" -> "archive"
+    my ($title) = File::Basename::fileparse(shift(), qr/\..*$/);
+    return $title;
 }
 
 #-------------------------------------------------------------------------------
@@ -550,6 +560,17 @@ sub generate_graphic_static
         die "Failed to generate $graph_file! Command: $cmd\n",
             "Output:\n  ", join("\n  ", @lines), "\n"
             unless $? == 0;
+
+        # register this new graphic into the database
+        $ctx->{dbh}->do(
+            "INSERT INTO graph ".
+            "(uniqname, machine_id, unix, days, defname, title, file) ".
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            undef,
+            path_title($graph_file), $machine_id, $ctx->{now}, $days,
+            $ref_graphdef->{name}, $ref_graphdef->{label},
+            Cwd::realpath($graph_file))
+            or die $ctx->{dbh}->errstr;
     }
 }
 
@@ -752,6 +773,7 @@ $res = Getopt::Long::GetOptions(
     'graphdef=s' => \$ctx{graphdeffile},
 );
 usage unless $res and not $ctx{help};
+delete $ctx{help};
 
 # read config file
 {
@@ -833,6 +855,9 @@ die "Failed to connect DBI (", $DBI::err, ")! ", $DBI::errstr, "\n"
 $ctx{machines} = $ctx{dbh}->selectall_hashref(
     'SELECT id, name, unix, uptime FROM machine', 'id');
 die "No machines found in DB!\n" unless keys(%{$ctx{machines}}) > 0;
+
+# delete all graphics references from the database
+$ctx{dbh}->do('TRUNCATE TABLE graph') or die $ctx{dbh}->errstr;
 
 # generate as much graphs as we can for every machines
 generate_machine_graphics(\%ctx, $_)
