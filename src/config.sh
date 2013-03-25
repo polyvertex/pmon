@@ -6,8 +6,10 @@
 # $Id$
 #
 
-# configuration
-SVN_REPOSITORY_URL="https://svn.jcl.io/pmon/trunk/src/"
+# default configuration
+[ -z "$PMON_URL" ]      && PMON_URL="https://svn.jcl.io/pmon/trunk/src/"
+[ -z "$PMON_SVN_USER" ] && PMON_SVN_USER=""
+[ -z "$PMON_GROUP" ]    && PMON_GROUP="www-data"
 
 
 #-------------------------------------------------------------------------------
@@ -55,6 +57,27 @@ function usage()
     echo "* $THIS_SCRIPT_NAME install-daemon [install_dir] [revision]"
     echo "  To install or update the PMon Daemon (server) in the specified"
     echo "  directory or, by default, in the same directory than this script."
+    echo ""
+    echo "Variables:"
+    echo ""
+    echo "  While invoking this script, there are several environment variables"
+    echo "  you can define/overwrite to alter its behavior."
+    echo ""
+    echo "* PMON_GROUP"
+    echo "  Defines the system's group name used to chgrp the installation"
+    echo "  directory. You can force this value to be empty empty, in which case"
+    echo "  the chgrp command will not be invoked during the post-install"
+    echo "  process. Current value: $PMON_GROUP"
+    echo ""
+    echo "* PMON_URL"
+    echo "  Defines the URL used by the subversion client to fetch the"
+    echo "  installation files. Current value:"
+    echo "  $PMON_URL"
+    echo ""
+    echo "* PMON_SVN_USER"
+    echo "  Forces the user name used by the subversion client to fetch the"
+    echo "  installation files. It is a 'just-in-case' variable available for"
+    echo "  convenience only. You should never need it."
     echo ""
 }
 
@@ -141,13 +164,14 @@ function fetch_install_files()
     [ -e "$TMP_DIR_INSTALLSRC" ] || mkdir -p "$TMP_DIR_INSTALLSRC"
 
     # export content of the svn repository
-    echo "Fecthing SVN copy from $SVN_REPOSITORY_URL (rev $REVISION)..."
-    #while [ -z "$SVNUSER" ]; do read -p "SVN username? " SVNUSER; done
-    #--username "$SVNUSER" --no-auth-cache \
+    TMP=""
+    [ -n "$PMON_SVN_USER" ] && TMP="user ${PMON_SVN_USER}; "
+    echo "Fecthing SVN copy from $PMON_URL (${TMP}rev $REVISION)..."
+    [ -n "$PMON_SVN_USER" ] && TMP="--username $PMON_SVN_USER --no-auth-cache"
     svn export \
         --force \
-        --revision $REVISION \
-        "$SVN_REPOSITORY_URL" "$TMP_DIR_INSTALLSRC" > "$TMP_FILE"
+        --revision $REVISION $TMP \
+        "$PMON_URL" "$TMP_DIR_INSTALLSRC" > "$TMP_FILE"
     [ $? -eq 0 ] || die 1 "Failed to fetch SVN copy!"
     echo
 
@@ -308,11 +332,14 @@ function install_stage_2()
     if [ $INSTALL_DAEMON -ne 0 ]; then
         for fname in PMon pmond.pl pmond.sh pmon-graph.pl; do
             [ -d "$INSTALL_DIR/bin/$fname" ] && rm -rf "$INSTALL_DIR/bin/$fname"
-            mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/"
+            mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/$fname"
+            [ -f "$INSTALL_DIR/bin/$fname" ] && chmod 0750 "$INSTALL_DIR/bin/$fname"
         done
-        chmod 0750 "$INSTALL_DIR/bin/pmond.pl"
-        chmod 0750 "$INSTALL_DIR/bin/pmond.sh"
-        chmod 0750 "$INSTALL_DIR/bin/pmon-graph.pl"
+        # cgi
+        mv -f "$TMP_DIR_INSTALLSRC/htdocs/"* "$INSTALL_DIR/var/htdocs/"
+        cp -pf "$TMP_DIR_INSTALLSRC/.revision"   "$INSTALL_DIR/var/htdocs/revision"
+        cp -pf "$TMP_DIR_INSTALLSRC/pmon-cgi.pl" "$INSTALL_DIR/var/htdocs/index.pl"
+        chmod 0750 "$INSTALL_DIR/var/htdocs/index.pl"
     fi
 
     # daemon: try to create the /etc/init.d symlink
@@ -327,6 +354,7 @@ function install_stage_2()
 
     # adjust access rights
     chmod -R o-rwx "$INSTALL_DIR"
+    [ $INSTALL_DAEMON -ne 0 -a -n "$PMON_GROUP" ] && chgrp -R "$PMON_GROUP" "$INSTALL_DIR"
 
     # try to restart daemon if needed
     if [ $restart_daemon -ne 0 ]; then
@@ -360,10 +388,15 @@ function install_stage_2()
 
 
 #-------------------------------------------------------------------------------
-for cmd in basename bash cat chmod chown cp cut date dirname head grep ln mktemp mv readlink rm stat svn touch tr; do
+for cmd in basename bash cat chmod chown cp cut date dirname getent grep head ln mktemp mv readlink rm stat svn touch tr; do
     type $cmd &> /dev/null
     [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
 done
+
+if [ -n "$PMON_GROUP" ]; then
+    TMP=$(getent group | grep "^${PMON_GROUP}:")
+    [ -z "$TMP" ] && die 1 "The PMON_GROUP \"$PMON_GROUP\" does not seem to exist! Please define manually the PMON_GROUP variable from the command line (ex: PMON_GROUP=www-data $0 {parameters})."
+fi
 
 # special running cases to perform minimalistic actions
 # if you modify this section, it is more likely that the user will have to
@@ -428,7 +461,7 @@ esac
 case "$ACTION" in
     install-all|install-agent|install-daemon)
         tmp=$(readlink -f "$INSTALL_DIR")
-        [ "$tmp" == "/" ] && die 1 "You want to install into '/'?! Sure..."
+        [ "$tmp" == "/" ] && die 1 "Are you sure you want to install files directly into '/'?!"
         init_vars
         if [ $INSTALL_STAGE -eq 0 ]; then
             # init stage: download fresh installable content to TMP_DIR, then

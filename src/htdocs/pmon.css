@@ -1,0 +1,171 @@
+body {
+  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-size: 10pt;
+  color: black;
+  background-color: white;
+  margin-top: 2%;
+}
+
+a {
+  color: #999999;
+  text-decoration: none;
+}
+a:hover {
+  color: orange; /* #FF3300; */
+  text-decoration: underline;
+}
+
+img {
+  border: 0px;
+  text-decoration: none;
+}
+
+ul {
+  margin: 0px 0px 0px 15px;
+  padding: 0px;
+}
+
+li {
+  margin: 0px;
+  padding: 0px;
+  list-style-type: disc;
+  list-style-position: outside;
+}
+
+small {
+  font-size: 7pt;
+}
+
+h1 {
+  font-size: 24pt;
+  font-weight: bold;
+}
+
+h2 {
+  font-size: 14pt;
+  font-weight: bold;
+}
+
+h3 {
+  font-size: 12pt;
+  font-weight: bold;
+}
+
+
+
+font.hard {
+  color: red;
+  font-weight: bold;
+}
+
+font.mysoft {
+  color: silver;
+}
+
+
+
+input {
+  border: 1px solid gray;
+}
+
+textarea {
+  border: 1px solid gray;
+}
+
+
+
+div.main {
+  border: 1px solid gray;
+  border-radius: 0.8em;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 10px;
+  width: 980px;
+}
+
+div.header {
+  text-align: center;
+  padding: 5px 20px 5px 20px;
+  clear: both;
+  background-color: #F5F5F5;
+  background-image: url("header.png");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+div.header a {
+  color: black;
+  text-decoration: none;
+}
+
+div.header a:hover {
+  color: orange;
+  text-decoration: none;
+}
+
+div.header small {
+  font-size: 8pt;
+  font-weight: normal;
+  text-transform: lowercase;
+}
+
+div.menu {
+  font-family: "Georgia", "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  text-align: left;
+  text-transform: lowercase;
+}
+
+div.body {
+  /* border: 1px dashed gray; */
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  text-align: center;
+  font-family: "Georgia", "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-size: 10pt;
+}
+
+div.body small {
+  font-size: 10pt;
+  font-weight: normal;
+}
+
+div.body h1 {
+  padding-left: 10px;
+  padding-right: 10px;
+  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-size: 32pt;
+}
+
+div.body h2 {
+  padding-left: 10px;
+  padding-right: 10px;
+  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+}
+
+div.body h3 {
+  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+}
+
+code {
+  font-family: Courier New, Courier, sans-serif;
+}
+
+
+
+table.machine {
+  text-align: left;
+  white-space: nowrap;
+  font-family: Courier New, Courier, sans-serif;
+}
+
+table.machine td {
+  /* border: 1px dashed gray; */
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+table.machine tr:hover {
+  background-color: #E8E8E8;
+}
