@@ -335,11 +335,17 @@ function install_stage_2()
             mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/$fname"
             [ -f "$INSTALL_DIR/bin/$fname" ] && chmod 0750 "$INSTALL_DIR/bin/$fname"
         done
+
         # cgi
         mv -f "$TMP_DIR_INSTALLSRC/htdocs/"* "$INSTALL_DIR/var/htdocs/"
         cp -pf "$TMP_DIR_INSTALLSRC/.revision"   "$INSTALL_DIR/var/htdocs/revision"
         cp -pf "$TMP_DIR_INSTALLSRC/pmon-cgi.pl" "$INSTALL_DIR/var/htdocs/index.pl"
         chmod 0750 "$INSTALL_DIR/var/htdocs/index.pl"
+
+        # embed the Config module into the cgi script
+        echo >> "$INSTALL_DIR/var/htdocs/index.pl"
+        cat "$INSTALL_DIR/bin/PMon/Config.pm" >> "$INSTALL_DIR/var/htdocs/index.pl"
+        [ $? -eq 0 ] || die 1 "Failed to embed Config module into CGI script!"
     fi
 
     # daemon: try to create the /etc/init.d symlink

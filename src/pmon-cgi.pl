@@ -13,14 +13,12 @@ use FindBin ();
 use CGI ();
 use DBI;
 
-use lib "$FindBin::RealBin";
-use PMon::Config;
-
 use constant
 {
     # default paths
-    DEFAULT_REVISION_FILE => $FindBin::RealBin.'/revision',
+    DEFAULT_BASE_DIR      => $FindBin::RealBin.'/../..',
     DEFAULT_CONFIG_FILE   => $FindBin::RealBin.'/../../etc/pmond.conf',
+    DEFAULT_REVISION_FILE => $FindBin::RealBin.'/revision',
     DEFAULT_HTDOCS_DIR    => $FindBin::RealBin,
 
     # html content
@@ -101,9 +99,9 @@ sub page_property
 sub tmpl_header
 {
     my $ctx = shift;
-    my $html_title  = TITLE;
+    my $html_title  = page_property($ctx, 'title').' '.TITLE;
     my $page_title1 = lc TITLE;
-    my $page_title2 = lc page_property($ctx, 'name');
+    my $page_title2 = lc page_property($ctx, 'title');
     my $desc        = lc page_property($ctx, 'desc');
     my $menu        = '';
 
@@ -111,7 +109,7 @@ sub tmpl_header
     foreach my $pname (@{PAGES_ORDER()})
     {
         next unless PAGES()->{$pname}{visible};
-        next if $pname eq $self->{page_name};
+        next if $pname eq $ctx->{page_name};
         $menu .= $ctx->{cgi}->a({
                 href  => url_addparams($ctx->{root_url}, ARGNAME_PAGE() => $pname),
                 title => PAGES()->{$pname}{desc},
@@ -155,7 +153,7 @@ EOV
 sub tmpl_footer
 {
     my $ctx = shift;
-    my $desc = lc TITLE.' '.TITLE_CAPTION.' v'.$ctx->{revision};
+    my $desc = lc TITLE_CAPTION.' v'.$ctx->{revision};
     my $author_link = $ctx->{cgi}->a({
             href   => 'http://'.AUTHOR_WWW.'/',
             #target => '_blank',
@@ -228,7 +226,7 @@ if (-e DEFAULT_REVISION_FILE)
     my $oconf = PMon::Config->new(
         file   => $config_file,
         strict => 1,
-        subst  => { '{BASEDIR}' => $FindBin::RealBin.'/..', },
+        subst  => { '{BASEDIR}' => DEFAULT_BASE_DIR, },
     );
 
     $ctx{db_source}  = $oconf->get_str('db_source');
@@ -268,7 +266,8 @@ $ctx{root_url} .= ($ctx{root_url} =~ /\/$/) ? '' : '/';
 # cgi param: requested machine id
 $ctx{machine_id} = $ctx{cgi}->url_param(ARGNAME_MACHINE_ID());
 $ctx{machine_id} = undef
-    unless $ctx{machine_id} =~ /^\d+$/
+    unless defined($ctx{machine_id})
+    and $ctx{machine_id} =~ /^\d+$/
     and exists($ctx{machines}{$ctx{machine_id}});
 $ctx{machine} = $ctx{machines}{$ctx{machine_id}}
     if defined $ctx{machine_id};
@@ -284,6 +283,10 @@ $ctx{page_name} = PAGES_ORDER()->[0] # fallback to the default page if machine i
 $ctx{page} = PAGES()->{$ctx{page_name}};
 
 # serve
+print $ctx{cgi}->header(-type => 'text/html');
+print tmpl_header(\%ctx);
+print tmpl_footer(\%ctx);
 
 # free and quit
 $ctx{dbh}->disconnect;
+exit 0;
