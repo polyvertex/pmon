@@ -854,7 +854,7 @@ die "Failed to connect DBI (", $DBI::err, ")! ", $DBI::errstr, "\n"
 # list machines
 $ctx{machines} = $ctx{dbh}->selectall_hashref(
     'SELECT id, name, unix, uptime FROM machine', 'id');
-die "No machines found in DB!\n" unless keys(%{$ctx{machines}}) > 0;
+die "No machine found in DB!\n" unless keys(%{$ctx{machines}}) > 0;
 
 # delete all graphics references from the database
 $ctx{dbh}->do('TRUNCATE TABLE graph') or die $ctx{dbh}->errstr;
