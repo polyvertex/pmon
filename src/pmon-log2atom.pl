@@ -182,7 +182,8 @@ sub log2atom
 
 #-------------------------------------------------------------------------------
 my %ctx = ( # global context
-    help => undef,
+    help       => undef,
+    understood => undef,
 
     configfile_daemon => DEFAULT_PMOND_CONFIG_FILE,
     configfile_agent  => DEFAULT_PMONA_CONFIG_FILE,
@@ -208,8 +209,13 @@ $res = Getopt::Long::GetOptions(
     'help|h|?'        => \$ctx{help},
     'config-daemon=s' => \$ctx{configfile_daemon},
     'config-agent=s'  => \$ctx{configfile_agent},
+    'understood'      => \$ctx{understood},
 );
 usage unless $res and not $ctx{help};
+die "Please acknowledge that you have read and understood the role of this ",
+    "critical script by appending --understood to the command line! ",
+    "Use the --help option for more info.\n"
+    unless $ctx{understood};
 delete $ctx{help};
 
 # read daemon's config file
