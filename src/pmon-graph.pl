@@ -392,15 +392,13 @@ sub db2rrd
     foreach (sort keys(%$ref_rrd_files))
     {
         return unless $ref_rrd_files->{$_}{dbkey} ~~ @$ref_available_dbkeys;
-        return
-            if defined($ref_rrd_files->{$_}{hintkey})
-            and not ($ref_rrd_files->{$_}{hintkey} ~~ @$ref_available_dbkeys);
     }
 
     # fetch the hint value if necessary
-    foreach (sort keys(%$ref_rrd_files))
+    foreach my $rrd_name (sort keys(%$ref_rrd_files))
     {
-        my $ref_rrd = $ref_rrd_files->{$_};
+        my $ref_rrd = $ref_rrd_files->{$rrd_name};
+
         next unless defined $ref_rrd->{hintkey};
 
         my $rows = $ctx->{dbh}->selectcol_arrayref(
@@ -413,6 +411,10 @@ sub db2rrd
             { Columns => [ 1 ] });
 
         $ref_rrd->{hint} = (defined($rows) and @$rows > 0) ? $rows->[0] : '';
+
+        warn "Could not find hint key \"", $ref_rrd->{hintkey},
+            "\" into DB (machine $machine_id; graph $rrd_name)!\n"
+            unless defined($rows) and @$rows > 0;
     }
 
     # create and/or update rrd files
@@ -470,6 +472,7 @@ sub db2rrd
 
                 if (defined $ref_lastrow)
                 {
+                    $rows = [ ] unless defined $rows;
                     unshift @$rows, $ref_lastrow;
                     $ref_lastrow = undef;
                 }
@@ -520,6 +523,7 @@ sub db2rrd
                         $ref_rrd->{start} = $next{unix_first};
                     }
 
+                    die unless @$rows == 0 or @$rows == 1;
                     $ref_lastrow = (@$rows > 0) ? $rows->[0] : undef;
                 }
             }
