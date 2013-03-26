@@ -330,7 +330,7 @@ function install_stage_2()
 
     # install daemon's binary files
     if [ $INSTALL_DAEMON -ne 0 ]; then
-        for fname in PMon pmond.pl pmond.sh pmon-graph.pl; do
+        for fname in PMon pmond.pl pmond.sh pmon-graph.pl pmon-log2atom.pl; do
             [ -d "$INSTALL_DIR/bin/$fname" ] && rm -rf "$INSTALL_DIR/bin/$fname"
             mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/$fname"
             [ -f "$INSTALL_DIR/bin/$fname" ] && chmod 0750 "$INSTALL_DIR/bin/$fname"

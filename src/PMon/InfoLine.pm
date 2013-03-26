@@ -44,26 +44,55 @@ sub new
     {
         chomp $self->{line};
 
-        my ($magic, $machine, $key, $value) =
-            split /\s+/, $self->{line}, 4;
-
-        if (defined($value) and
-            $magic eq 'pmon1' and
-            $machine =~ /^[\w\-\_\.]+$/ and
-            $key =~ /^[\w\-\_\.]+$/)
+        if ($self->{line} =~ /^pmon(0|1)\s+/)
         {
-            $self->{magic}   = $magic;
-            $self->{machine} = $machine;
-            $self->{key}     = $key;
-            $self->{value}   = $value;
+            my $proto_version = int $1;
+
+            if ($proto_version == 0)
+            {
+                my ($magic, $unix, $machine, $key, $value) =
+                    split /\s+/, $self->{line}, 5;
+
+                if (defined($value) and
+                    $unix =~ /^\d+$/ and
+                    $machine =~ /^[\w\-\_\.]+$/ and
+                    $key =~ /^[\w\-\_\.]+$/)
+                {
+                    $self->{magic}   = $magic;
+                    $self->{'time'}  = $unix;
+                    $self->{machine} = $machine;
+                    $self->{key}     = $key;
+                    $self->{value}   = $value;
+                }
+            }
+            elsif ($proto_version == 1)
+            {
+                my ($magic, $machine, $key, $value) =
+                    split /\s+/, $self->{line}, 4;
+
+                if (defined($value) and
+                    $machine =~ /^[\w\-\_\.]+$/ and
+                    $key =~ /^[\w\-\_\.]+$/)
+                {
+                    $self->{magic}   = $magic;
+                    $self->{machine} = $machine;
+                    $self->{key}     = $key;
+                    $self->{value}   = $value;
+                }
+            }
         }
-        #elsif (defined $self->{addr_packed})
+
+        #unless ($self->is_valid)
         #{
-        #    warn "Malformed info line to/from ", $self->addr_str, "! Line: ", $self->{line}, "\n";
-        #}
-        #else
-        #{
-        #    warn "Malformed info line: ", $self->{line}, "\n";
+        #    if (defined $self->{addr_packed})
+        #    {
+        #       warn "Malformed info line to/from ", $self->addr_str,
+        #           "! Line: ", $self->{line}, "\n";
+        #    }
+        #    else
+        #    {
+        #       warn "Malformed info line: ", $self->{line}, "\n";
+        #    }
         #}
     }
 
