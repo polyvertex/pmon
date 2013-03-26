@@ -284,6 +284,8 @@ sub graphdef_template
 {
     my ($ctx, $tmpl, $ref_color_roundrobin_idx, $ref_subst) = @_;
 
+    return unless defined $tmpl;
+
     while ((my $idx = index($tmpl, '{DEVICE}')) >= $[)
     {
         die unless exists $ref_subst->{DEVICE};
@@ -310,6 +312,29 @@ sub graphdef_template
             substr $tmpl, $idx, length($match_str),
                 $ref_subst->{rrd_files}{$name}{file};
         }
+    }
+
+    while ($tmpl =~ /(\{HINT\:([^\}]+)\})/)
+    {
+        my $match_str = $1;
+        my $name      = $2;
+
+        die unless exists $ref_subst->{rrd_files};
+        die "RRD file not found for hint \"$match_str\"!\n"
+            unless exists $ref_subst->{rrd_files}{$name};
+        die unless defined $ref_subst->{rrd_files}{$name}{hint};
+
+        while ((my $idx = index($tmpl, $match_str)) >= $[)
+        {
+            substr $tmpl, $idx, length($match_str),
+                $ref_subst->{rrd_files}{$name}{hint};
+        }
+    }
+
+    while ((my $idx = index($tmpl, '{HINT}')) >= $[)
+    {
+        die unless exists $ref_subst->{DEVICE};
+        substr $tmpl, $idx, 6, '{HINT:'.$ref_subst->{DEVICE}.'}';
     }
 
     while ($tmpl =~ /(\{COLOR\:([^\}]+)\})/)
@@ -344,14 +369,14 @@ sub db_available_keys
 {
     my ($ctx, $machine_id, $history_start) = @_;
 
-    my $available_dbkeys = $ctx->{dbh}->selectcol_arrayref(qq{
-        SELECT la.key
-        FROM logatom AS la
-        WHERE la.machine_id = $machine_id
-        AND ( la.unix_first >= $history_start OR la.unix_last >= $history_start )
-        AND ( la.unix_first <= $ctx->{now} OR la.unix_last <= $ctx->{now} )
-        GROUP BY la.key
-        ORDER BY la.id ASC },
+    my $available_dbkeys = $ctx->{dbh}->selectcol_arrayref(
+        "SELECT la.key ".
+        "FROM logatom AS la ".
+        "WHERE la.machine_id = $machine_id ".
+        "AND ( la.unix_first >= $history_start OR la.unix_last >= $history_start ) ".
+        "AND ( la.unix_first <= $ctx->{now} OR la.unix_last <= $ctx->{now} ) ".
+        "GROUP BY la.key ".
+        "ORDER BY la.id ASC ",
         { Columns => [ 1 ] });
     #warn "INFO KEYS for machine $machine_id (", scalar(@$available_dbkeys), "):\n", join(', ', sort(@$available_dbkeys)), "\n";
 
@@ -366,8 +391,28 @@ sub db2rrd
     # check if we've got all the info keys necessary to build this graph
     foreach (sort keys(%$ref_rrd_files))
     {
-        my $required_key = $ref_rrd_files->{$_}{dbkey};
-        return unless $required_key ~~ @$ref_available_dbkeys;
+        return unless $ref_rrd_files->{$_}{dbkey} ~~ @$ref_available_dbkeys;
+        return
+            if defined($ref_rrd_files->{$_}{hintkey})
+            and not ($ref_rrd_files->{$_}{hintkey} ~~ @$ref_available_dbkeys);
+    }
+
+    # fetch the hint value if necessary
+    foreach (sort keys(%$ref_rrd_files))
+    {
+        my $ref_rrd = $ref_rrd_files->{$_};
+        next unless defined $ref_rrd->{hintkey};
+
+        my $rows = $ctx->{dbh}->selectcol_arrayref(
+            "SELECT la.value ".
+            "FROM logatom AS la ".
+            "WHERE machine_id = $machine_id ".
+            "AND la.key = ".$ctx->{dbh}->quote($ref_rrd->{hintkey})." ".
+            "ORDER BY la.id DESC ".
+            "LIMIT 1",
+            { Columns => [ 1 ] });
+
+        $ref_rrd->{hint} = (defined($rows) and @$rows > 0) ? $rows->[0] : '';
     }
 
     # create and/or update rrd files
@@ -511,12 +556,14 @@ sub generate_graphic_static
             $rrd_name, $rra_profile->{heartbeat};
 
         $rrd_files{$rrd_name} = {
-            file  => $rrd_file,
-            dbkey => $ref_rrd_value->{dbkey},
-            step  => $rra_profile->{step},
-            ds    => $rrd_ds,
-            rras  => $rra_profile->{definitions},
-            start => $history_start,
+            file    => $rrd_file,
+            dbkey   => $ref_rrd_value->{dbkey},
+            hintkey => $ref_rrd_value->{dbhint},
+            hint    => undef,
+            step    => $rra_profile->{step},
+            ds      => $rrd_ds,
+            rras    => $rra_profile->{definitions},
+            start   => $history_start,
         };
     }
     db2rrd $ctx, $machine_id, \%rrd_files, $available_dbkeys;
@@ -617,7 +664,7 @@ sub generate_graphic_dynamic
             };
             my $rrd_file;
 
-            foreach my $k (qw( name dbkey ))
+            foreach my $k (qw( name dbkey dbhint ))
             {
                 $ref_static_valdef->{$k} = graphdef_template
                     $ctx, $ref_valdef->{$k}, \$color_roundrobin_idx,
@@ -691,7 +738,7 @@ sub generate_graphic_dynamic_onegraph
             };
             my $rrd_file;
 
-            foreach my $k (qw( name dbkey ))
+            foreach my $k (qw( name dbkey dbhint ))
             {
                 $ref_static_valdef->{$k} = graphdef_template
                     $ctx, $ref_valdef->{$k}, \$color_roundrobin_idx,

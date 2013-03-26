@@ -31,24 +31,27 @@
                 {
                     name        => 'cpu',
                     dbkey       => 'cpu.usage',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_PERCENTAGE,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
                 {
                     name        => 'mem',
                     dbkey       => 'mem.usage',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_PERCENTAGE,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
                 {
                     name        => 'swap',
                     dbkey       => 'swap.usage',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_PERCENTAGE,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
             ],
             rrd_graph_options => [
-                '--vertical-label usage',
+                '--vertical-label usage (%)',
                 '--lower-limit 0',
                 '--upper-limit 100',
                 #'--rigid',
@@ -76,18 +79,21 @@
                 {
                     name        => 'loadavg1',
                     dbkey       => 'ps.loadavg1',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSVALUE,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
                 {
                     name        => 'loadavg5',
                     dbkey       => 'ps.loadavg5',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSVALUE,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
                 {
                     name        => 'loadavg15',
                     dbkey       => 'ps.loadavg15',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSVALUE,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
@@ -117,11 +123,12 @@
             type    => GRAPHDEFINITION_DYNAMIC,
             periods => [ 1, 7 ],
             label   => "{DEVICE} throughput",
-            vname   => qr/^net\.([^\.]+)\.bytes\.(in|out)$/, # {DEVICE}=$1
+            vname   => qr/^net\.([^\.]+)\.bytes\.(?:in|out)$/, # {DEVICE}=$1
             values  => [
                 {
                     name        => '{DEVICE}bytesin',
                     dbkey       => 'net.{DEVICE}.bytes.in',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                     rrg_def     => [ 'DEF:{DEVICE}bytesin={RRDFILE}:{DEVICE}bytesin:AVERAGE', ],
@@ -130,6 +137,7 @@
                 {
                     name        => '{DEVICE}bytesout',
                     dbkey       => 'net.{DEVICE}.bytes.out',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                     rrg_def     => [ 'DEF:{DEVICE}bytesout={RRDFILE}:{DEVICE}bytesout:AVERAGE', ],
@@ -147,37 +155,30 @@
             rrd_graph_def => [ ],
             rrd_graph_draw => [ ],
         },
-        
+
         {
-            name    => 'storaccess',
-            type    => GRAPHDEFINITION_DYNAMIC,
-            periods => [ 1, 7 ],
-            label   => "{DEVICE} throughput",
-            vname   => qr/^hdd\.([^\.]+)\.bytes\.[rw]$/, # {DEVICE}=$1
+            name    => 'storusage',
+            type    => GRAPHDEFINITION_DYNAMIC_ONEGRAPH,
+            periods => [ 1, 7, 30, 365 ],
+            label   => "HDD Usage",
+            vname   => qr/^mnt\.([^\.]+)\.usage$/, # {DEVICE}=$1
             values  => [
                 {
-                    name        => '{DEVICE}read',
-                    dbkey       => 'hdd.{DEVICE}.bytes.r',
-                    rrd_profile => RRD_PROFILE_ABSCOUNTER,
+                    name        => '{DEVICE}',
+                    dbkey       => 'mnt.{DEVICE}.usage',
+                    dbhint      => 'mnt.{DEVICE}.point',
+                    rrd_profile => RRD_PROFILE_PERCENTAGE,
                     rra_profile => RRA_PROFILE_MINUTE,
-                    rrg_def     => [ 'DEF:{DEVICE}read={RRDFILE}:{DEVICE}read:AVERAGE', ],
-                    rrg_draw    => [ 'AREA:{DEVICE}read#{COLOR:green_light}:Read', ],
-                },
-                {
-                    name        => '{DEVICE}write',
-                    dbkey       => 'hdd.{DEVICE}.bytes.r',
-                    rrd_profile => RRD_PROFILE_ABSCOUNTER,
-                    rra_profile => RRA_PROFILE_MINUTE,
-                    rrg_def     => [ 'DEF:{DEVICE}write={RRDFILE}:{DEVICE}write:AVERAGE', ],
-                    rrg_draw    => [ 'LINE1:{DEVICE}write#{COLOR:red}:Write', ],
+                    rrg_def     => [ 'DEF:{DEVICE}used={RRDFILE}:{DEVICE}:AVERAGE', ],
+                    rrg_draw    => [ 'LINE1:{DEVICE}used#{RRCOLOR}:{DEVICE} ({HINT})', ],
                 },
             ],
             rrd_graph_options => [
-                '--vertical-label bytes/s',
+                '--vertical-label used (%)',
                 '--lower-limit 0',
-                #'--upper-limit 100',
-                #'--rigid',
-                #'--units-exponent 0',
+                '--upper-limit 100',
+                '--rigid',
+                '--units-exponent 0',
                 #'--base 1024',
             ],
             rrd_graph_def => [ ],
@@ -194,6 +195,7 @@
                 {
                     name        => '{DEVICE}',
                     dbkey       => 'hdd.{DEVICE}.temp',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_PERCENTAGE,
                     rra_profile => RRA_PROFILE_MINUTE,
                     rrg_def     => [ 'DEF:{DEVICE}temp={RRDFILE}:{DEVICE}:AVERAGE', ],
@@ -213,6 +215,44 @@
         },
 
         {
+            name    => 'storaccess',
+            type    => GRAPHDEFINITION_DYNAMIC,
+            periods => [ 1, 7 ],
+            label   => "{DEVICE} throughput",
+            vname   => qr/^hdd\.([^\.]+)\.bytes\.[rw]$/, # {DEVICE}=$1
+            values  => [
+                {
+                    name        => '{DEVICE}read',
+                    dbkey       => 'hdd.{DEVICE}.bytes.r',
+                    dbhint      => undef,
+                    rrd_profile => RRD_PROFILE_ABSCOUNTER,
+                    rra_profile => RRA_PROFILE_MINUTE,
+                    rrg_def     => [ 'DEF:{DEVICE}read={RRDFILE}:{DEVICE}read:AVERAGE', ],
+                    rrg_draw    => [ 'AREA:{DEVICE}read#{COLOR:green_light}:Read', ],
+                },
+                {
+                    name        => '{DEVICE}write',
+                    dbkey       => 'hdd.{DEVICE}.bytes.r',
+                    dbhint      => undef,
+                    rrd_profile => RRD_PROFILE_ABSCOUNTER,
+                    rra_profile => RRA_PROFILE_MINUTE,
+                    rrg_def     => [ 'DEF:{DEVICE}write={RRDFILE}:{DEVICE}write:AVERAGE', ],
+                    rrg_draw    => [ 'LINE1:{DEVICE}write#{COLOR:red}:Write', ],
+                },
+            ],
+            rrd_graph_options => [
+                '--vertical-label bytes/s',
+                '--lower-limit 0',
+                #'--upper-limit 100',
+                #'--rigid',
+                #'--units-exponent 0',
+                #'--base 1024',
+            ],
+            rrd_graph_def => [ ],
+            rrd_graph_draw => [ ],
+        },
+
+        {
             name    => 'named',
             type    => GRAPHDEFINITION_STATIC,
             periods => [ 1, 7 ],
@@ -221,12 +261,14 @@
                 {
                     name        => 'reqin',
                     dbkey       => 'named.req.in',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
                 {
                     name        => 'reqout',
                     dbkey       => 'named.req.out',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
@@ -258,12 +300,14 @@
                 {
                     name        => 'bytes',
                     dbkey       => 'apache.bytes',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
                 {
                     name        => 'hits',
                     dbkey       => 'apache.hits',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
@@ -295,12 +339,14 @@
                 {
                     name        => 'bytes',
                     dbkey       => 'lighttpd.bytes',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
                 {
                     name        => 'hits',
                     dbkey       => 'lighttpd.hits',
+                    dbhint      => undef,
                     rrd_profile => RRD_PROFILE_ABSCOUNTER,
                     rra_profile => RRA_PROFILE_MINUTE,
                 },
