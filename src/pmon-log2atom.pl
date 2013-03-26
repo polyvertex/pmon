@@ -139,27 +139,25 @@ sub log2atom
 {
     my $ctx = shift;
     my @columns = qw( id unix machine_id key value );
-    my $sth;
-    my $rows;
+    my $offset = 0;
     my %unknown_machine_ids;
 
-    # the big query
-    $sth = $ctx->{dbh}->prepare(
-        "SELECT l.".join(', l.', @columns)." ".
-        "FROM log AS l ".
-        "ORDER BY l.id ASC ")
-        or die $ctx->{dbh}->errstr;
-    $sth->execute or die $sth->errstr;
-
+    # the big loop
     while (1)
     {
-        $rows = $sth->fetchall_arrayref(undef, $ctx->{db_maxrows});
+        my $rows = $ctx->{dbh}->selectall_arrayref(
+            "SELECT l.".join(', l.', @columns)." ".
+            "FROM log AS l ".
+            "ORDER BY l.id ASC ".
+            "LIMIT $offset, ".($offset + $ctx->{db_maxrows})." ");
         last unless defined($rows) and @$rows > 0;
 
         while (@$rows > 0)
         {
             my %r = map { $columns[$_] => $rows->[0][$_] } 0..$#columns;
+
             shift @$rows;
+            ++$offset;
 
             unless (exists $ctx->{machines}{$r{machine_id}})
             {
@@ -171,6 +169,8 @@ sub log2atom
                 $r{key}, $r{value};
         }
     }
+
+    flush_info $ctx;
 
     warn "Some of the rows in the 'log' table could not be sent to the daemon ",
         "because the following machine's id(s) did not match: ",
