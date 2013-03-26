@@ -46,24 +46,27 @@ sub usage
 Usage:
     $name [options]
 
-    This script allows to recreate from scratch the content of the 'logatom'
-    database table from the 'log' table, in case it has been corrupted up by a
-    bug found into the code of the daemon or the agent.
-
-    CAUTION: During its process, all the connected agent's (installed locally or
-    onto other machines) MUST NOT try to send new data as it may corrupt the
-    'logatom' table again.
-    Please ensure you downloaded the latest version of this script AND the
-    daemon!
-    Please also ensure that the configuration files of the local agent and
-    daemon are up-to-date.
+    This script allows to create from scratch the content of the 'logatom'
+    database table from the content of the 'log' table, in case it has been
+    corrupted up by a bug found into the code of the daemon or the agent.
 
     It acts like a regular agent except that it does not read values from
     physical sensors but from the 'log' table of the PMon's database.
     It also use a special protocol to communicate with the daemon so the
-    timestamp of the gathered value can be sent as well (by default, tfor the
-    sake of safety and coherence, the timestamp inserted into the database comes
-    from the daemon, not the agent).
+    timestamp of the gathered values can be sent as well (by default, for the
+    sake of safety and time coherence, the timestamp inserted into the database
+    comes from the daemon, not the agent).
+
+CAUTION:
+    During its process, agents of every machines (installed locally or on other
+    machines) MUST NOT try to send new data as it may corrupt the 'logatom'
+    table again.
+
+    Please ensure you downloaded the latest version of this script AND the
+    daemon!
+
+    Please also ensure that the configuration files of the local agent and
+    daemon are up-to-date.
 
 Parameters:
     --help, -h
@@ -74,6 +77,12 @@ Parameters:
     --config-agent={config_file}
         Specify the path of the agent's configuration file. Defaults to:
         $default_pmona_configfile
+    --understood
+        Since this script perform a critical operation and works properly only
+        under some circumstances, and since it will run without asking for any
+        confirmation, this required parameter allows to ensure that the user is
+        fully aware of what he does in his willing to perform the conversion
+        process.
 
 USAGE
 }
@@ -213,8 +222,8 @@ $res = Getopt::Long::GetOptions(
 );
 usage unless $res and not $ctx{help};
 die "Please acknowledge that you have read and understood the role of this ",
-    "critical script by appending --understood to the command line! ",
-    "Use the --help option for more info.\n"
+    "critical script by appending the --understood parameter to the command ",
+    "line! Use the --help option for more info.\n"
     unless $ctx{understood};
 delete $ctx{help};
 
@@ -270,4 +279,5 @@ $ctx{dbh}->do('TRUNCATE TABLE logatom') or die $ctx{dbh}->errstr;
 # go!
 log2atom \%ctx;
 
+warn "Done. Do not forget to delete all your RRD files!\n";
 exit 0;
