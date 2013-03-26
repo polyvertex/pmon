@@ -26,7 +26,7 @@ use constant
 
     # default paths
     DEFAULT_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmond.conf',
-    DEFAULT_RRD_DIR     => $FindBin::RealBin.'/../var',
+    DEFAULT_RRD_DIR     => $FindBin::RealBin.'/../var/rrd',
     DEFAULT_HTDOCS_DIR  => $FindBin::RealBin.'/../var/htdocs',
 
     # enum: graphic definition types
