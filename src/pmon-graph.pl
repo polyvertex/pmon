@@ -461,7 +461,7 @@ sub db2rrd
             my $ref_lastrow;
 
             $sth->bind_param(1, $ref_rrd->{dbkey});
-            $sth->execute or die $sth->errstr;
+            $sth->execute or die $ctx->{dbh}->errstr;
 
             while (1)
             {

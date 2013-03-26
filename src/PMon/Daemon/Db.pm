@@ -116,9 +116,9 @@ sub commit_uptime
     my $res = $sth->execute($unix, $uptime, $machine_id);
     unless ($res > 0)
     {
-        warn "Failed to update machine uptime (", $sth->err, ")! ", $sth->errstr, "\n";
+        warn "Failed to update machine uptime (", $self->{dbh}->err, ")! ", $self->{dbh}->errstr, "\n";
         if ($self->{dbh}{Driver}{Name} eq 'mysql' and
-            $sth->err == MYSQLERR_SERVER_GONE_ERROR)
+            $self->{dbh}->err == MYSQLERR_SERVER_GONE_ERROR)
         {
             warn "Reconnecting to database...\n";
             $poe_kernel->yield('db_disconnect', 0);
@@ -167,8 +167,8 @@ sub commit_info
         $res = $sth->execute($unix, $machine_id, $key, $value);
         unless ($res > 0)
         {
-            $err = $sth->err;
-            die "Failed to insert info log ($res; $err)! ", $sth->errstr, "\n";
+            $err = $self->{dbh}->err;
+            die "Failed to insert info log ($res; $err)! ", $self->{dbh}->errstr, "\n";
         }
 
         # insert info into the 'logatom' table
@@ -188,8 +188,8 @@ sub commit_info
                 $res = $sth->execute($machine_id, $key);
                 unless ($res)
                 {
-                    $err = $sth->err;
-                    die "Failed to insert atomic info ($err)! ", $sth->errstr, "\n";
+                    $err = $self->{dbh}->err;
+                    die "Failed to insert atomic info ($err)! ", $self->{dbh}->errstr, "\n";
                 }
                 $row = $sth->fetchrow_hashref;
                 $sth->finish;
@@ -211,8 +211,8 @@ sub commit_info
                 $res = $sth->execute($unix, $cache_rowid);
                 unless ($res > 0)
                 {
-                    $err = $sth->err;
-                    die "Failed to update atomic info ($err)! ", $sth->errstr, "\n";
+                    $err = $self->{dbh}->err;
+                    die "Failed to update atomic info ($err)! ", $self->{dbh}->errstr, "\n";
                 }
             }
             else
@@ -222,8 +222,8 @@ sub commit_info
                 $res = $sth->execute($machine_id, $key, $unix, $unix, $value);
                 unless ($res > 0)
                 {
-                    $err = $sth->err;
-                    die "Failed to insert info log ($res; $err)! ", $sth->errstr, "\n";
+                    $err = $self->{dbh}->err;
+                    die "Failed to insert info log ($res; $err)! ", $self->{dbh}->errstr, "\n";
                 }
 
                 # reset the associated cache entry if needed
@@ -400,7 +400,7 @@ sub _read_machines
     my $sth = $self->{dbh}->prepare('SELECT id, name FROM machine');
     unless (defined $sth->execute)
     {
-        warn 'Failed to fetch machines from db ('.$sth->err.')! ', $sth->errstr, "\n";
+        warn 'Failed to fetch machines from db ('.$self->{dbh}->err.')! ', $self->{dbh}->errstr, "\n";
         return;
     }
 
@@ -444,7 +444,7 @@ sub _machine_id
         my $res = $sth->execute($machine_name);
         if ($res != 1)
         {
-            warn "Failed to insert machine \"$machine_name\" into db ($res; ", $sth->err, ")! ", $sth->errstr, "\n";
+            warn "Failed to insert machine \"$machine_name\" into db ($res; ", $self->{dbh}->err, ")! ", $self->{dbh}->errstr, "\n";
             return;
         }
     }
