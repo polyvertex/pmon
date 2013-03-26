@@ -225,6 +225,14 @@ sub commit_info
                     $err = $sth->err;
                     die "Failed to insert info log ($res; $err)! ", $sth->errstr, "\n";
                 }
+
+                # reset the associated cache entry if needed
+                $cache_rowid =
+                    ($self->{dbh}{Driver}{Name} eq 'mysql') ?
+                    $self->{dbh}{'mysql_insertid'} : undef;
+                $cache_value = $value;
+                $self->{cache}{$cache_key}{rowid} = $cache_rowid;
+                    if exists $self->{cache}{$cache_key};
             }
         }
 
