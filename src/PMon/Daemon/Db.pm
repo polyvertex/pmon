@@ -231,7 +231,7 @@ sub commit_info
                     ($self->{dbh}{Driver}{Name} eq 'mysql') ?
                     $self->{dbh}{'mysql_insertid'} : undef;
                 $cache_value = $value;
-                $self->{cache}{$cache_key}{rowid} = $cache_rowid;
+                $self->{cache}{$cache_key}{rowid} = $cache_rowid
                     if exists $self->{cache}{$cache_key};
             }
         }
