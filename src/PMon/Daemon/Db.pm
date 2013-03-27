@@ -346,7 +346,7 @@ sub on_connect
         $step++;
 
         $self->{sth}{sel_last_atominfo} = $self->{dbh}->prepare(
-            'SELECT id, unix, '.$self->qi('value').' '.
+            'SELECT id, '.$self->qi('value').' '.
             'FROM logatom '.
             'WHERE machine_id = ? '.
             'AND '.$self->qi('key').' = ? '.
