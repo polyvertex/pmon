@@ -30,9 +30,9 @@ use constant
     # paths
     REVISION_FILE      => $MY_DIR.'/../.revision',
     SCRIPTS_DIR        => $MY_DIR.'/../etc/scripts',
-    CONFIG_FILE        => $MY_DIR.'/../etc/pmona.conf',
-    BINCONFIG_FILE     => $MY_DIR.'/../var/pmona.conf.bin',
-    PID_FILE           => $MY_DIR.'/../var/pmona.pid',
+    CONFIG_FILE        => $MY_DIR.'/../etc/pmon-agent.conf',
+    BINCONFIG_FILE     => $MY_DIR.'/../var/pmon-agent.conf.bin',
+    PID_FILE           => $MY_DIR.'/../var/pmon-agent.pid',
     FRESH_INSTALL_FILE => $MY_DIR.'/../var/.installed-agent',
 
     # maximum running time for a script

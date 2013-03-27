@@ -199,7 +199,7 @@ sub ps_stat
 
     # the first pass is to get all the sids of the processes we want to ignore:
     # * our own session (i.e.: not only our own process!)
-    # * pmon agent (pmona)
+    # * pmon agent
     # * ovh.com monitoring software (rtm)
     for (my $pass = 0; $pass < 2; ++$pass)
     {
@@ -213,14 +213,14 @@ sub ps_stat
                 # regex test cases:
                 # * GOOD: '/usr/bin/perl /usr/local/rtm/bin/rtm 24',
                 # * GOOD: '/usr/local/rtm/bin/rtm 24',
-                # * GOOD: '/home/var/pmon/bin/pmona.pl',
-                # * GOOD: 'perl /home/var/pmon/bin/pmona.pl',
-                # * FAIL: 'perl /home/var/pmon/bin/pmond.pl --config /home/var/pmon/etc/pmond.conf',
-                # * FAIL: '/home/var/pmon/bin/pmond.pl --config /home/var/pmon/etc/pmond.conf',
+                # * GOOD: '/home/var/pmon/bin/pmon-agent.pl',
+                # * GOOD: 'perl /home/var/pmon/bin/pmon-agent.pl',
+                # * FAIL: 'perl /home/var/pmon/bin/pmon-daemon.pl --config /home/var/pmon/etc/pmon-daemon.conf',
+                # * FAIL: '/home/var/pmon/bin/pmon-daemon.pl --config /home/var/pmon/etc/pmon-daemon.conf',
                 # * FAIL: '/usr/bin/perl -w /home/jc/t.pl',
                 $sids_ignored{$sid} = 1
                     if $pid == $$
-                    or $cmd =~ /^((\S+)?perl\s+.*|\S+)(pmona(\.pl)?|rtm\s+)/;
+                    or $cmd =~ /^((\S+)?perl\s+.*|\S+)(pmon\-agent(\.pl)?|rtm\s+)/;
             }
             elsif ($pass == 1)
             {

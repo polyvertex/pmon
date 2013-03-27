@@ -17,7 +17,7 @@ use constant
 {
     # default paths
     DEFAULT_BASE_DIR      => $FindBin::RealBin.'/../..',
-    DEFAULT_CONFIG_FILE   => $FindBin::RealBin.'/../../etc/pmond.conf',
+    DEFAULT_CONFIG_FILE   => $FindBin::RealBin.'/../../etc/pmon-daemon.conf',
     DEFAULT_REVISION_FILE => $FindBin::RealBin.'/revision',
     DEFAULT_HTDOCS_DIR    => $FindBin::RealBin,
 
@@ -147,6 +147,13 @@ return <<EOV;
 <div class="body">
 
 EOV
+}
+
+#-------------------------------------------------------------------------------
+sub tmpl_body
+{
+    my $ctx = shift;
+    return '';
 }
 
 #----------------------------------------------------------------------------
@@ -285,6 +292,7 @@ $ctx{page} = PAGES()->{$ctx{page_name}};
 # serve
 print $ctx{cgi}->header(-type => 'text/html');
 print tmpl_header(\%ctx);
+print tmpl_body(\%ctx);
 print tmpl_footer(\%ctx);
 
 # free and quit

@@ -239,35 +239,35 @@ function install_stage_2()
     fi
 
     # wait for agent to finish before we go further
-    if [ $INSTALL_AGENT -ne 0 -a -e "$INSTALL_DIR/var/pmona.pid" ]; then
-        tmp=$(< "$INSTALL_DIR/var/pmona.pid")
+    if [ $INSTALL_AGENT -ne 0 -a -e "$INSTALL_DIR/var/pmon-agent.pid" ]; then
+        tmp=$(< "$INSTALL_DIR/var/pmon-agent.pid")
         echo -n "Waiting for running agent to finish before continuing (pid $tmp)..."
         while [ -e "/proc/$tmp" ]; do echo -n "." && sleep 1; done
         echo
     fi
 
     # delete agent's binary config file
-    [ $INSTALL_AGENT -ne 0 -a -e "$INSTALL_DIR/var/pmona.conf.bin" ] && \
-        rm -f "$INSTALL_DIR/var/pmona.conf.bin"
+    [ $INSTALL_AGENT -ne 0 -a -e "$INSTALL_DIR/var/pmon-agent.conf.bin" ] && \
+        rm -f "$INSTALL_DIR/var/pmon-agent.conf.bin"
 
     # shutdown daemon in case we want to reinstall it
-    if [ $INSTALL_DAEMON -ne 0 -a -e "$INSTALL_DIR/bin/pmond.sh" -a -e "$INSTALL_DIR/var/pmond.pid" ]; then
-        tmp=$(< "$INSTALL_DIR/var/pmond.pid")
+    if [ $INSTALL_DAEMON -ne 0 -a -e "$INSTALL_DIR/bin/pmon-daemon.sh" -a -e "$INSTALL_DIR/var/pmon-daemon.pid" ]; then
+        tmp=$(< "$INSTALL_DIR/var/pmon-daemon.pid")
         if [ -e "/proc/$tmp" ]; then
             restart_daemon=1
             echo "Try to stop daemon before upgrading it (pid $tmp)..."
-            "$INSTALL_DIR/bin/pmond.sh" stop
+            "$INSTALL_DIR/bin/pmon-daemon.sh" stop
         fi
     fi
 
     # first install?
-    [ -e "$INSTALL_DIR/bin/pmond.pl" ] && first_install_daemon=0
-    [ -e "$INSTALL_DIR/bin/pmona.pl" ] && first_install_agent=0
+    [ -e "$INSTALL_DIR/bin/pmon-daemon.pl" ] && first_install_daemon=0
+    [ -e "$INSTALL_DIR/bin/pmon-agent.pl" ] && first_install_agent=0
 
     # cleanup destination directory (do not 'set -e' here!)
     rm -f "$INSTALL_DIR/etc/*.dist" &> /dev/null
     rm -f "$INSTALL_DIR/var/*.pid" &> /dev/null
-    mv -f "$INSTALL_DIR/var/pmond.log" "$INSTALL_DIR/var/pmond.log.1" &> /dev/null
+    mv -f "$INSTALL_DIR/var/pmon-daemon.log" "$INSTALL_DIR/var/pmon-daemon.log.1" &> /dev/null
     [ $INSTALL_AGENT -ne 0 -a $INSTALL_DAEMON -ne 0 ] && \
         rm -rf "$INSTALL_DIR/bin" &> /dev/null
 
@@ -290,8 +290,8 @@ function install_stage_2()
 
     # install config files
     tmp=""
-    [ $INSTALL_AGENT -ne 0 ] && tmp="$tmp pmona"
-    [ $INSTALL_DAEMON -ne 0 ] && tmp="$tmp pmond"
+    [ $INSTALL_AGENT -ne 0 ] && tmp="$tmp pmon-agent"
+    [ $INSTALL_DAEMON -ne 0 ] && tmp="$tmp pmon-daemon"
     if [ -n "$tmp" ]; then
         for name in $tmp; do
             local srcfile="$TMP_DIR_INSTALLSRC/$name.sample.conf"
@@ -317,20 +317,20 @@ function install_stage_2()
 
     # install agent's binary files
     if [ $INSTALL_AGENT -ne 0 ]; then
-        for fname in pmona.pl; do
+        for fname in pmon-agent.pl; do
             mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/"
         done
-        chmod 0750 "$INSTALL_DIR/bin/pmona.pl"
+        chmod 0750 "$INSTALL_DIR/bin/pmon-agent.pl"
 
         # embed the Config module into the main script
-        echo >> "$INSTALL_DIR/bin/pmona.pl"
-        cat "$TMP_DIR_INSTALLSRC/PMon/Config.pm" >> "$INSTALL_DIR/bin/pmona.pl"
-        [ $? -eq 0 ] || die 1 "Failed to embed Config module into pmona.pl!"
+        echo >> "$INSTALL_DIR/bin/pmon-agent.pl"
+        cat "$TMP_DIR_INSTALLSRC/PMon/Config.pm" >> "$INSTALL_DIR/bin/pmon-agent.pl"
+        [ $? -eq 0 ] || die 1 "Failed to embed Config module into pmon-agent.pl!"
     fi
 
     # install daemon's binary files
     if [ $INSTALL_DAEMON -ne 0 ]; then
-        for fname in PMon pmond.pl pmond.sh pmon-graph.pl pmon-log2atom.pl; do
+        for fname in PMon pmon-daemon.pl pmon-daemon.sh pmon-graph.pl pmon-log2atom.pl; do
             [ -d "$INSTALL_DIR/bin/$fname" ] && rm -rf "$INSTALL_DIR/bin/$fname"
             mv -f "$TMP_DIR_INSTALLSRC/$fname" "$INSTALL_DIR/bin/$fname"
             [ -f "$INSTALL_DIR/bin/$fname" ] && chmod 0750 "$INSTALL_DIR/bin/$fname"
@@ -352,7 +352,7 @@ function install_stage_2()
     # daemon: try to create the /etc/init.d symlink
     if [ $INSTALL_DAEMON -ne 0 -a -d "/etc/init.d" ]; then
         echo "Creating /etc/init.d/pmond symlink..."
-        ln -sf "$INSTALL_DIR/bin/pmond.sh" "/etc/init.d/pmond"
+        ln -sf "$INSTALL_DIR/bin/pmon-daemon.sh" "/etc/init.d/pmond"
     fi
 
     # touch flag files to notify daemon/agent that this is a fresh install
@@ -366,7 +366,7 @@ function install_stage_2()
     # try to restart daemon if needed
     if [ $restart_daemon -ne 0 ]; then
         echo "Try to restart daemon..."
-        "$INSTALL_DIR/bin/pmond.sh" start
+        "$INSTALL_DIR/bin/pmon-daemon.sh" start
     fi
 
     echo
@@ -376,17 +376,17 @@ function install_stage_2()
         echo "You may have to perform the following steps manually to finish your installation:"
         if [ $INSTALL_DAEMON -ne 0 ]; then
             echo "* Check daemon's config:"
-            echo "    $INSTALL_DIR/etc/pmond.conf"
+            echo "    $INSTALL_DIR/etc/pmon-daemon.conf"
             echo "* Launch daemon if not done already:"
-            echo "    $INSTALL_DIR/bin/pmond.sh restart"
+            echo "    $INSTALL_DIR/bin/pmon-daemon.sh restart"
             echo "* Configure your system to ensure daemon will be launched after reboot"
             echo "  The details depend on your distro"
         fi
         if [ $INSTALL_AGENT -ne 0 ]; then
             echo "* Check agent's config:"
-            echo "    $INSTALL_DIR/etc/pmona.conf"
+            echo "    $INSTALL_DIR/etc/pmon-agent.conf"
             echo "* Configure root's cron to run the agent every minutes:"
-            echo "    */1 * * * * $INSTALL_DIR/bin/pmona.pl > /dev/null"
+            echo "    */1 * * * * $INSTALL_DIR/bin/pmon-agent.pl > /dev/null"
         fi
         echo
     fi

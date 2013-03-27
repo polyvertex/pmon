@@ -25,7 +25,7 @@ use constant
     MAX_CMDLINE_LENGTH => ($^O =~ /^MSWin/i) ? 8191 : 32767,
 
     # default paths
-    DEFAULT_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmond.conf',
+    DEFAULT_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmon-daemon.conf',
     DEFAULT_RRD_DIR     => $FindBin::RealBin.'/../var/rrd',
     DEFAULT_HTDOCS_DIR  => $FindBin::RealBin.'/../var/htdocs',
 

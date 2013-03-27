@@ -29,7 +29,7 @@ DIR=$(cd -P "$(dirname "$SOURCE")" && pwd)
 ROOT_DIR=$(cd -P "$(dirname "$DIR")" && pwd)
 
 # name of the daemon
-NAME=pmond
+NAME=pmon-daemon
 #NAME=$(basename "$0")
 #NAME=${NAME%.*}
 
@@ -59,7 +59,7 @@ status()
     local pid=$(read_pid)
 
     if [ -e "/proc/$pid" ]; then
-        echo "The '$NAME' daemon is running (pid $pid)."
+        echo "'$NAME' is running (pid $pid)."
     else
         echo "Daemon is not running."
         if [ -e "$PID_FILE" ]; then
@@ -94,7 +94,7 @@ start()
     local pid=$(read_pid)
 
     if [ -e "/proc/$pid" ]; then
-        echo "The '$NAME' daemon is already running (pid $pid) !"
+        echo "'$NAME' is already running (pid $pid)!"
         return 1
     fi
 

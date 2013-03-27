@@ -22,8 +22,8 @@ use PMon::Config;
 use constant
 {
     # default paths
-    DEFAULT_PMOND_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmond.conf',
-    DEFAULT_PMONA_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmona.conf',
+    DEFAULT_PMOND_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmon-daemon.conf',
+    DEFAULT_PMONA_CONFIG_FILE => $FindBin::RealBin.'/../etc/pmon-agent.conf',
 
     # timeout value for a send() operation
     SEND_TIMEOUT => 10, # seconds
@@ -39,8 +39,8 @@ use constant
 sub usage
 {
     my $name = File::Basename::basename(__FILE__);
-    my $default_pmond_configfile = DEFAULT_PMOND_CONFIG_FILE;
-    my $default_pmona_configfile = DEFAULT_PMONA_CONFIG_FILE;
+    my $default_daemon_configfile = DEFAULT_PMOND_CONFIG_FILE;
+    my $default_agent_configfile = DEFAULT_PMONA_CONFIG_FILE;
 
   die <<USAGE;
 Usage:
@@ -73,10 +73,10 @@ Parameters:
         Print this message and quit.
     --config-daemon={config_file}
         Specify the path of the daemon's configuration file. Defaults to:
-        $default_pmond_configfile
+        $default_daemon_configfile
     --config-agent={config_file}
         Specify the path of the agent's configuration file. Defaults to:
-        $default_pmona_configfile
+        $default_agent_configfile
     --understood
         Since this script perform a critical operation and works properly only
         under some circumstances, and since it will run without asking for any
