@@ -106,9 +106,10 @@ sub on_start
 
     # connect to db
     $self->{db} = PMon::Daemon::Db->new(
-        source => $self->{config}->get_str('db_source'),
-        user   => $self->{config}->get_str('db_user'),
-        pass   => $self->{config}->get_str('db_pass') );
+        source   => $self->{config}->get_str('db_source'),
+        user     => $self->{config}->get_str('db_user'),
+        pass     => $self->{config}->get_str('db_pass'),
+        full_log => $self->{config}->get_bool('db_full_log', 1) );
     $self->{db}->start;
 
     # start network service

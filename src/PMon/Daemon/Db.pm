@@ -36,7 +36,7 @@ sub new
     my %args  = @_;
     my $self  = bless { }, $class;
 
-    foreach (qw( source user pass ))
+    foreach (qw( source user pass full_log ))
     {
         die "Parameter '$_' not defined!"
             unless exists($args{$_}) and defined($args{$_});
@@ -163,12 +163,15 @@ sub commit_info
         my ($sth, $res, $row);
 
         # insert info into the normal 'log' table
-        $sth = $self->{sth}{ins_info};
-        $res = $sth->execute($unix, $machine_id, $key, $value);
-        unless ($res > 0)
+        if ($self->{full_log})
         {
-            $err = $self->{dbh}->err;
-            die "Failed to insert info log ($res; $err)! ", $self->{dbh}->errstr, "\n";
+            $sth = $self->{sth}{ins_info};
+            $res = $sth->execute($unix, $machine_id, $key, $value);
+            unless ($res > 0)
+            {
+                $err = $self->{dbh}->err;
+                die "Failed to insert info log ($res; $err)! ", $self->{dbh}->errstr, "\n";
+            }
         }
 
         # insert info into the 'logatom' table
@@ -368,7 +371,9 @@ sub on_connect
     # commit enqueued data if needed
     #$self->commit;
 
-    warn "Connected to DB.\n";
+    warn "Connected to DB (full logging ",
+        ($self->{full_log} ? 'enabled' : 'disabled'),
+        ").\n";
 }
 
 #-------------------------------------------------------------------------------

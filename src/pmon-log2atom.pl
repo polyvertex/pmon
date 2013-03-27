@@ -68,6 +68,10 @@ CAUTION:
     Please also ensure that the configuration files of the local agent and
     daemon are up-to-date.
 
+    The db_full_log daemon's setting must be DISABLED or you may run into an
+    infinite loop as the 'log' table will be read and filled-in at the same
+    time!
+
 Parameters:
     --help, -h
         Print this message and quit.
