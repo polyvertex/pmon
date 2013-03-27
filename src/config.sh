@@ -294,7 +294,7 @@ function install_stage_2()
     [ $INSTALL_DAEMON -ne 0 ] && tmp="$tmp pmon-daemon"
     if [ -n "$tmp" ]; then
         for name in $tmp; do
-            local srcfile="$TMP_DIR_INSTALLSRC/$name.sample.conf"
+            local srcfile="$TMP_DIR_INSTALLSRC/$name.conf"
             local destfile="$INSTALL_DIR/etc/$name.conf"
 
             if [ -e "$destfile" ]; then
