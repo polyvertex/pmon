@@ -36,7 +36,7 @@ sub new
     my %args  = @_;
     my $self  = bless { }, $class;
 
-    foreach (qw( source user pass full_log ))
+    foreach (qw( source user pass full_log heartbeat ))
     {
         die "Parameter '$_' not defined!"
             unless exists($args{$_}) and defined($args{$_});
@@ -138,6 +138,7 @@ sub commit_info
     my $err;
     my $cache_key;
     my $cache_rowid;
+    my $cache_unix;
     my $cache_value;
     my $return = 1;
 
@@ -153,6 +154,7 @@ sub commit_info
     if (exists $self->{cache}{$cache_key})
     {
         $cache_rowid = $self->{cache}{$cache_key}{rowid};
+        $cache_unix  = $self->{cache}{$cache_key}{unix};
         $cache_value = $self->{cache}{$cache_key}{value};
     }
 
@@ -181,9 +183,12 @@ sub commit_info
             my $just_update = 0; # by default, we choose to insert 
 
             # do we already have this info with the same value?
-            if (defined($cache_rowid) and defined($cache_value))
+            if (defined($cache_rowid) and defined($cache_value) and defined($cache_unix))
             {
-                $just_update = 1 if $value eq $cache_value;
+                $just_update = 1
+                    if ($unix - $cache_unix) >= 0
+                    and ($unix - $cache_unix) <= $self->{heartbeat}
+                    and $value eq $cache_value;
             }
             else
             {
@@ -233,7 +238,6 @@ sub commit_info
                 $cache_rowid =
                     ($self->{dbh}{Driver}{Name} eq 'mysql') ?
                     $self->{dbh}{'mysql_insertid'} : undef;
-                $cache_value = $value;
                 $self->{cache}{$cache_key}{rowid} = $cache_rowid
                     if exists $self->{cache}{$cache_key};
             }
@@ -281,6 +285,7 @@ sub commit_info
     }
     $self->{cache}{$cache_key} = {
         rowid => $cache_rowid,
+        unix  => $unix,
         value => $value,
     };
 
@@ -341,7 +346,7 @@ sub on_connect
         $step++;
 
         $self->{sth}{sel_last_atominfo} = $self->{dbh}->prepare(
-            'SELECT id, '.$self->qi('value').' '.
+            'SELECT id, unix, '.$self->qi('value').' '.
             'FROM logatom '.
             'WHERE machine_id = ? '.
             'AND '.$self->qi('key').' = ? '.
