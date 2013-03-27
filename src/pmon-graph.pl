@@ -597,7 +597,7 @@ sub generate_graphic_static
             "--width $ref_period->{graph_width} ".
             "--height $ref_period->{graph_height} ";
 
-        $cmd .= /^([^\s]+)\s(.*)$/ ? "$1 \"$2\" " : $_
+        $cmd .= /^([^\s]+)\s(.*)$/ ? "$1 \"$2\" " : "$_ "
             foreach (@{$ref_graphdef->{rrd_graph_options}});
 
         foreach my $arg (@{$ref_graphdef->{rrd_graph_def}}, @{$ref_graphdef->{rrd_graph_draw}})
