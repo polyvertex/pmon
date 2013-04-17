@@ -44,11 +44,11 @@ use constant
     },
 
     ARGNAME_PAGE       => 'p',
-    ARGNAME_MACHINE_ID => 'mid',
+    ARGNAME_MACHINE_ID => 'm',
 };
 
 
-#----------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 sub url_encode
 {
     # imitate the behavior of php's rawurlencode()
@@ -57,7 +57,7 @@ sub url_encode
     return $url;
 }
 
-#----------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 sub url_decode
 {
     my $url = shift;
@@ -65,7 +65,7 @@ sub url_decode
     return $url;
 }
 
-#----------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 sub url_addparams
 {
     my $url = shift;
@@ -86,6 +86,53 @@ sub url_addparams
 }
 
 #-------------------------------------------------------------------------------
+sub url_page_machine
+{
+    my ($ctx, $machine_id) = @_;
+
+    return url_addparams
+        $ctx->{root_url},
+        ARGNAME_PAGE()       => 'machine',
+        ARGNAME_MACHINE_ID() => $machine_id;
+}
+
+#-------------------------------------------------------------------------------
+sub datetime_utcstr
+{
+    my @t = gmtime(shift() // time());
+    return sprintf
+        '%04u-%02u-%02u %02u:%02u:%02u',
+        $t[5] + 1900, $t[4] + 1, $t[3],
+        $t[2], $t[1], $t[0];
+}
+
+#-------------------------------------------------------------------------------
+sub time_duration2str
+{
+    my $seconds = shift;
+    my $str;
+
+    if ($seconds >= 86400)
+    {
+        $str .= int($seconds / 86400).'d ';
+        $seconds %= 86400;
+    }
+    if ($seconds >= 3600)
+    {
+        $str .= int($seconds / 3600).'h ';
+        $seconds %= 3600;
+    }
+    if ($seconds >= 60)
+    {
+        $str .= int($seconds / 60).'m ';
+        $seconds %= 60;
+    }
+    $str .= $seconds.'s';
+
+    return $str;
+}
+
+#-------------------------------------------------------------------------------
 sub page_property
 {
     my ($ctx, $prop_name) = @_;
@@ -95,11 +142,13 @@ sub page_property
         $ctx->{page}{$prop_name};
 }
 
+
+
 #-------------------------------------------------------------------------------
 sub tmpl_header
 {
     my $ctx = shift;
-    my $html_title  = page_property($ctx, 'title').' '.TITLE;
+    my $html_title  = page_property($ctx, 'title').' &middot; '.TITLE;
     my $page_title1 = lc TITLE;
     my $page_title2 = lc page_property($ctx, 'title');
     my $desc        = lc page_property($ctx, 'desc');
@@ -109,24 +158,46 @@ sub tmpl_header
     foreach my $pname (@{PAGES_ORDER()})
     {
         next unless PAGES()->{$pname}{visible};
-        next if $pname eq $ctx->{page_name};
-        $menu .= $ctx->{cgi}->a({
-                href  => url_addparams($ctx->{root_url}, ARGNAME_PAGE() => $pname),
-                title => PAGES()->{$pname}{desc},
-            },
-            PAGES()->{$pname}{title});
-        $menu .= ', ';
+
+        if ($pname eq 'machine')
+        {
+            foreach my $machine_id (sort keys(%{$ctx->{machines}}))
+            {
+                next
+                    if defined($ctx->{machine_id})
+                    and $machine_id == $ctx->{machine_id};
+
+                my $machine_name = $ctx->{machines}{$machine_id}{name};
+
+                $menu .= $ctx->{cgi}->a({
+                        href  => url_page_machine($ctx, $machine_id),
+                        title => sprintf(PAGES()->{$pname}{desc}, $machine_name),
+                    },
+                    sprintf(PAGES()->{$pname}{title}, $machine_name));
+                $menu .= ', ';
+            }
+        }
+        else
+        {
+            next if $pname eq $ctx->{page_name};
+            $menu .= $ctx->{cgi}->a({
+                    href  => url_addparams($ctx->{root_url}, ARGNAME_PAGE() => $pname),
+                    title => PAGES()->{$pname}{desc},
+                },
+                PAGES()->{$pname}{title});
+            $menu .= ', ';
+        }
     }
     $menu =~ s%,\s+$%%g;
     $menu = "<strong>see also &raquo</strong> $menu"
         if length($menu) > 0;
 
 return <<EOV;
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
   <title>$html_title</title>
-  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
   <meta http-equiv="Pragma" content="no-cache">
   <link rel="stylesheet" type="text/css" media="screen" href="pmon.css">
   <link rel="icon" href="favicon.ico">
@@ -150,13 +221,6 @@ EOV
 }
 
 #-------------------------------------------------------------------------------
-sub tmpl_body
-{
-    my $ctx = shift;
-    return '';
-}
-
-#----------------------------------------------------------------------------
 sub tmpl_footer
 {
     my $ctx = shift;
@@ -185,9 +249,79 @@ return <<EOV;
 EOV
 }
 
+
+
+#-------------------------------------------------------------------------------
+sub tmpl_body_home__machines
+{
+    my $ctx = shift;
+    my $output = '';
+
+    $output .= <<EOV;
+<center>
+<table class="machines">
+EOV
+
+    foreach my $machine_id (sort keys(%{$ctx->{machines}}))
+    {
+        my $ref_machine = $ctx->{machines}{$machine_id};
+        my $item_anchor = $ctx->{cgi}->a({ name => $ref_machine->{name} }, '');
+        my $item_label = $ctx->{cgi}->a({
+                href  => url_page_machine($ctx, $machine_id),
+                title => '',
+            },
+            $ref_machine->{name});
+        my $item_lastup_delta = $ctx->{now} - $ref_machine->{unix};
+        my $item_lastup = $ctx->{cgi}->abbr(
+            { title => datetime_utcstr($ref_machine->{unix}).' (UTC)' },
+            time_duration2str($item_lastup_delta)." ago");
+        $item_lastup = "<font class=\"hard\">$item_lastup</font>"
+            if $item_lastup_delta >= 75;
+        my $item_uptime = $ctx->{cgi}->abbr(
+            { title => 'Last boot at '.datetime_utcstr($ctx->{now} - $ref_machine->{uptime}).' (UTC), '.$ref_machine->{uptime}.' seconds' },
+            time_duration2str($ref_machine->{uptime}));
+
+        $output .=
+            "  <tr>\n".
+            "    <td>$item_anchor$item_label</td>\n".
+            "    <td>$item_lastup</td>\n".
+            "    <td>$item_uptime</td>\n".
+            "  </tr>\n";
+    }
+
+    $output .= <<EOV;
+</table>
+</center>
+
+EOV
+
+    return $output;
+}
+
+#-------------------------------------------------------------------------------
+sub tmpl_body_home
+{
+    my $ctx = shift;
+
+    return
+        (keys(%{$ctx->{machines}}) > 0) ?
+        tmpl_body_home__machines($ctx) :
+        "No machine monitored!\n";
+}
+
+#-------------------------------------------------------------------------------
+sub tmpl_body_machine
+{
+    my $ctx = shift;
+    return '';
+}
+
+
+
 #-------------------------------------------------------------------------------
 my %ctx = ( # global context
     revision => 0,
+    now      => time,
 
     db_source  => undef,
     db_user    => undef,
@@ -292,7 +426,7 @@ $ctx{page} = PAGES()->{$ctx{page_name}};
 # serve
 print $ctx{cgi}->header(-type => 'text/html');
 print tmpl_header(\%ctx);
-print tmpl_body(\%ctx);
+print main->can('tmpl_body_'.$ctx{page_name})->(\%ctx);
 print tmpl_footer(\%ctx);
 
 # free and quit

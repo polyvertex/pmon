@@ -342,7 +342,6 @@ function install_stage_2()
         cp -pf "$TMP_DIR_INSTALLSRC/pmon-cgi.pl" "$INSTALL_DIR/var/htdocs/index.pl"
         chmod 0750 "$INSTALL_DIR/var/htdocs/index.pl"
 
-
         # embed the Config module into the cgi script
         echo >> "$INSTALL_DIR/var/htdocs/index.pl"
         cat "$INSTALL_DIR/bin/PMon/Config.pm" >> "$INSTALL_DIR/var/htdocs/index.pl"
