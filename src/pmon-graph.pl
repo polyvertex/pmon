@@ -485,7 +485,7 @@ sub db2rrd
                 }
                 die if scalar(@columns) != scalar(@{$rows->[0]});
 
-                # is it the very last row we will have to deal with from this request?
+                # is it the very last row from this request?
                 if (@$rows == 1)
                 {
                     my %curr = map { $columns[$_] => $rows->[0][$_] } 0..$#columns;
