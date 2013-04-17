@@ -1,5 +1,5 @@
 body {
-  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-family: Geneva, Verdana, Arial, Helvetica, sans-serif;
   font-size: 10pt;
   color: black;
   background-color: white;
@@ -11,7 +11,7 @@ a {
   text-decoration: none;
 }
 a:hover {
-  color: orange; /* #FF3300; */
+  color: orange;
   text-decoration: underline;
 }
 
@@ -110,7 +110,7 @@ div.header small {
 }
 
 div.menu {
-  font-family: "Georgia", "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-family: Georgia, Geneva, Verdana, Arial, Helvetica, sans-serif;
   text-align: left;
   text-transform: lowercase;
 }
@@ -122,7 +122,7 @@ div.body {
   padding-top: 20px;
   padding-bottom: 20px;
   text-align: center;
-  font-family: "Georgia", "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-family: Georgia, Geneva, Verdana, Arial, Helvetica, sans-serif;
   font-size: 10pt;
 }
 
@@ -134,38 +134,38 @@ div.body small {
 div.body h1 {
   padding-left: 10px;
   padding-right: 10px;
-  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-family: Geneva, Verdana, Arial, Helvetica, sans-serif;
   font-size: 32pt;
 }
 
 div.body h2 {
   padding-left: 10px;
   padding-right: 10px;
-  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-family: Geneva, Verdana, Arial, Helvetica, sans-serif;
 }
 
 div.body h3 {
-  font-family: "Geneva", "Verdana", "Arial", "Helvetica", sans-serif;
+  font-family: Geneva, Verdana, Arial, Helvetica, sans-serif;
 }
 
 code {
-  font-family: Courier New, Courier, sans-serif;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
 }
 
 
 
-table.machine {
+table.machines {
   text-align: left;
   white-space: nowrap;
-  font-family: Courier New, Courier, sans-serif;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
 }
 
-table.machine td {
+table.machines td {
   /* border: 1px dashed gray; */
   padding-left: 5px;
   padding-right: 5px;
 }
 
-table.machine tr:hover {
+table.machines tr:hover {
   background-color: #E8E8E8;
 }
