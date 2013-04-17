@@ -146,6 +146,9 @@ Parameters:
     --graphdef={config_file}
         Specify the path of the graphics definitions file.
         Default configuration will be used if none specified.
+    --reset
+        Restart from scratch every needed RRD databases.
+        Used for debugging purpose, you very probably do not need it.
 
 USAGE
 }
@@ -421,6 +424,10 @@ sub db2rrd
     foreach my $rrd_name (sort keys(%$ref_rrd_files))
     {
         my $ref_rrd = $ref_rrd_files->{$rrd_name};
+
+        # delete existing rrd file if required
+        unlink($ref_rrd->{file})
+            if $ctx->{reset_rrd} and -e $ref_rrd->{file};
 
         # create rrd file or just update it?
         unless (-e $ref_rrd->{file})
@@ -793,6 +800,7 @@ my %ctx = ( # global context
     help         => undef,
     configfile   => DEFAULT_CONFIG_FILE,
     graphdeffile => undef,
+    reset_rrd    => undef,
 
     db_source  => undef,
     db_user    => undef,
@@ -822,6 +830,7 @@ $res = Getopt::Long::GetOptions(
     'help|h|?'   => \$ctx{help},
     'config=s'   => \$ctx{configfile},
     'graphdef=s' => \$ctx{graphdeffile},
+    'reset'      => \$ctx{reset_rrd},
 );
 usage unless $res and not $ctx{help};
 delete $ctx{help};
