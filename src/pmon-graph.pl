@@ -62,8 +62,8 @@ use constant
 
     RRA_PROFILES => {
         RRA_PROFILE_MINUTE() => {           # if value is updated every minutes
-            step        => 60,               # seconds
-            heartbeat   => 75,               # seconds
+            step        => 60,              # seconds
+            heartbeat   => 90,              # seconds
             definitions => [
                 'RRA:AVERAGE:0.5:1:1440',   # no avg, 24 hours of data
                 'RRA:AVERAGE:0.5:10:1008',  # avg every 10 minutes, 7 days of data
@@ -80,8 +80,8 @@ use constant
             ],
         },
         RRA_PROFILE_HOUR() => {           # if value is updated every minutes
-            step        => 3600,           # seconds
-            heartbeat   => 3700,           # seconds
+            step        => 3600,          # seconds
+            heartbeat   => 3900,          # seconds
             definitions => [
                 'RRA:AVERAGE:0.5:1:720',  # no avg, 30 days of data
                 'RRA:AVERAGE:0.5:3:2920', # avg every 3 hours, 365 days of data
