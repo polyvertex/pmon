@@ -160,6 +160,15 @@ table.machines {
   font-family: Menlo, Monaco, 'Courier New', monospace;
 }
 
+table.machines th {
+  /* border: 1px dashed gray; */
+  text-align: center;
+  white-space: nowrap;
+  font-weight: bold;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
 table.machines td {
   /* border: 1px dashed gray; */
   padding-left: 5px;

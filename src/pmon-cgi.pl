@@ -260,6 +260,11 @@ sub tmpl_body_home__machines
     $output .= <<EOV;
 <center>
 <table class="machines">
+  <tr>
+    <th>Machine</th>
+    <th>Last update</th>
+    <th>Uptime</th>
+  </tr>
 EOV
 
     foreach my $machine_id (sort keys(%{$ctx->{machines}}))
