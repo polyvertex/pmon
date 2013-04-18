@@ -80,7 +80,7 @@ div.main {
   margin-left: auto;
   margin-right: auto;
   padding: 10px;
-  width: 980px;
+  width: 950px;
 }
 
 div.header {
@@ -117,9 +117,9 @@ div.menu {
 
 div.body {
   /* border: 1px dashed gray; */
-  padding-left: 10px;
-  padding-right: 10px;
-  padding-top: 20px;
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 10px;
   padding-bottom: 20px;
   text-align: center;
   font-family: Georgia, Geneva, Verdana, Arial, Helvetica, sans-serif;
@@ -177,4 +177,18 @@ table.machines td {
 
 table.machines tr:hover {
   background-color: #E8E8E8;
+}
+
+
+table.graphs {
+  text-align: center;
+  white-space: nowrap;
+}
+
+table.graphs th {
+  white-space: nowrap;
+  font-size: 12pt;
+  font-weight: bold;
+  padding-left: 5px;
+  padding-right: 5px;
 }
