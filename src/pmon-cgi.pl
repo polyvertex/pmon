@@ -10,6 +10,7 @@ use strict;
 use warnings;
 
 use FindBin ();
+use File::Basename ();
 use CGI ();
 use DBI;
 
@@ -314,11 +315,124 @@ sub tmpl_body_home
         "No machine monitored!\n";
 }
 
+
+
+#-------------------------------------------------------------------------------
+sub tmpl_body_machine__graphgroup
+{
+    my ($ctx, $rows) = @_;
+    my $output = '';
+
+    for (my $i = 0; $i < scalar(@$rows); )
+    {
+        my $ref_graph     = $rows->[$i];
+        my $ref_nextgraph = ($i + 1 < scalar(@$rows)) ? $rows->[$i + 1] : undef;
+
+        # special case: display 'day' and 'week' graphs side by side if we can
+        if ($ref_graph->{days} == 1 and
+            defined($ref_nextgraph) and
+            $ref_nextgraph->{days} == 7)
+        {
+            my $img1 = $ctx->{cgi}->img({
+                src => File::Basename::basename($ref_graph->{file}),
+                alt => $ref_graph->{title},
+            });
+            my $img2 = $ctx->{cgi}->img({
+                src => File::Basename::basename($ref_nextgraph->{file}),
+                alt => $ref_nextgraph->{title},
+            });
+
+            $output .=
+                "  <tr>\n".
+                "    <td>$img1</td>\n".
+                "    <td>$img2</td>\n".
+                "  </tr>\n";
+
+            $i += 2;
+        }
+        else
+        {
+            my $img = $ctx->{cgi}->img({
+                src => File::Basename::basename($ref_graph->{file}),
+                alt => $ref_graph->{title},
+            });
+
+            $output .=
+                "  <tr>\n".
+                "    <td colspan=2>$img</td>\n".
+                "  </tr>\n";
+
+            ++$i;
+        }
+    }
+
+    return $output;
+}
+
 #-------------------------------------------------------------------------------
 sub tmpl_body_machine
 {
     my $ctx = shift;
-    return '';
+    my $output = '';
+    my $rows;
+    my %available_defnames;
+    my %displayed_defnames;
+
+    $rows = $ctx->{dbh}->selectcol_arrayref(
+        'SELECT defname '.
+        'FROM graph '.
+        'WHERE machine_id = '.$ctx->{machine_id}.' '.
+        'ORDER BY defname ASC');
+    die unless defined($rows) and @$rows > 0;
+    %available_defnames = map { $_ => undef } @$rows;
+    $rows = undef;
+
+    $output .= <<EOV;
+<center>
+<table class="graphs">
+EOV
+
+    foreach my $defname (( @{$ctx->{graphs_order}}, sort(keys(%available_defnames)) ))
+    {
+        next unless exists $available_defnames{$defname};
+        next if exists $displayed_defnames{$defname};
+
+        $rows = $ctx->{dbh}->selectall_arrayref(
+            'SELECT uniqname, machine_id, unix, days, defname, graphname, title, file '.
+            'FROM graph '.
+            'WHERE machine_id = '.$ctx->{machine_id}.' '.
+            'AND defname = '.$ctx->{dbh}->quote($defname).' '.
+            'ORDER BY defname ASC, days ASC, graphname ASC, uniqname ASC ',
+            { Slice => { } });
+
+        if (defined($rows) and @$rows > 0)
+        {
+            $output .=
+                "  <tr><td colspan=2>&nbsp;</td></tr>\n"
+                if keys(%displayed_defnames) > 0;
+            $output .=
+                "  <tr>\n".
+                "    <th colspan=2>".$rows->[0]{title}."</th>\n".
+                "  </tr>\n";
+            $output .= tmpl_body_machine__graphgroup $ctx, $rows;
+        }
+        else
+        {
+            $output .=
+                "  <tr><th colspan=2>Failed to fetch $defname graphs!</th></tr>\n";
+        }
+
+        $displayed_defnames{$defname} = 1;
+    }
+
+
+    $output .= <<EOV;
+</table>
+</center>
+
+EOV
+
+    return $output;
 }
 
 
@@ -328,10 +442,11 @@ my %ctx = ( # global context
     revision => 0,
     now      => time,
 
-    db_source  => undef,
-    db_user    => undef,
-    db_pass    => undef,
-    dir_htdocs => undef,
+    db_source    => undef,
+    db_user      => undef,
+    db_pass      => undef,
+    dir_htdocs   => undef,
+    graphs_order => [ ],
 
     machines => { },
 
@@ -375,10 +490,11 @@ if (-e DEFAULT_REVISION_FILE)
         subst  => { '{BASEDIR}' => DEFAULT_BASE_DIR, },
     );
 
-    $ctx{db_source}  = $oconf->get_str('db_source');
-    $ctx{db_user}    = $oconf->get_str('db_user');
-    $ctx{db_pass}    = $oconf->get_str('db_pass');
-    $ctx{dir_htdocs} = $oconf->get_subst_str('dir_htdocs', DEFAULT_HTDOCS_DIR);
+    $ctx{db_source}    = $oconf->get_str('db_source');
+    $ctx{db_user}      = $oconf->get_str('db_user');
+    $ctx{db_pass}      = $oconf->get_str('db_pass');
+    $ctx{dir_htdocs}   = $oconf->get_subst_str('dir_htdocs', DEFAULT_HTDOCS_DIR);
+    $ctx{graphs_order} = [ split(/\s+/, $oconf->get_str('cgi_graphics_order', '')) ];
     die "Please check database access credentials in $config_file!\n"
         unless defined($ctx{db_source})
         and defined($ctx{db_user})
