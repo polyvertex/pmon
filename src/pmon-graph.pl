@@ -661,7 +661,7 @@ sub generate_graphic_dynamic
         my $color_roundrobin_idx = 0;
         my %static_graphdef = (
             name              => $ref_graphdef->{name},
-            graph_name        => $ref_graphdef->{name}.$device,
+            graph_name        => $ref_graphdef->{name}.'-'.$device,
             type              => GRAPHDEFINITION_STATIC,
             periods           => [ @{$ref_graphdef->{periods}} ],
             label             => graphdef_template($ctx, $ref_graphdef->{label}, undef, { DEVICE => $device }),
