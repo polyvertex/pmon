@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS `graph` (
   `unix` int(10) unsigned NOT NULL,
   `days` int(10) unsigned NOT NULL,
   `defname` varchar(255) COLLATE latin1_general_ci NOT NULL,
+  `graphname` varchar(255) COLLATE latin1_general_ci NOT NULL,
   `title` varchar(255) COLLATE latin1_general_ci NOT NULL,
   `file` varchar(255) COLLATE latin1_general_ci NOT NULL,
   PRIMARY KEY (`uniqname`)

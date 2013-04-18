@@ -625,12 +625,12 @@ sub generate_graphic_static
         # register this new graphic into the database
         $ctx->{dbh}->do(
             "INSERT INTO graph ".
-            "(uniqname, machine_id, unix, days, defname, title, file) ".
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(uniqname, machine_id, unix, days, defname, graphname, title, file) ".
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             undef,
             path_title($graph_file), $machine_id, $ctx->{now}, $days,
-            $ref_graphdef->{name}, $ref_graphdef->{label},
-            Cwd::realpath($graph_file))
+            $ref_graphdef->{name}, $ref_graphdef->{graph_name},
+            $ref_graphdef->{label}, Cwd::realpath($graph_file))
             or die $ctx->{dbh}->errstr;
     }
 }
