@@ -589,8 +589,11 @@ sub generate_graphic_static
     # create graph for each period
     foreach my $days (@{$ref_graphdef->{periods}})
     {
+        $ref_graphdef->{graph_name} = $ref_graphdef->{name}
+            unless defined $ref_graphdef->{graph_name};
+
         my $ref_period  = PERIODS()->{$days};
-        my $graph_file  = $ctx->{dir_htdocs}."/graph-$machine_id-$ref_graphdef->{name}-$ref_period->{name}.png";
+        my $graph_file  = $ctx->{dir_htdocs}."/graph-$machine_id-$ref_graphdef->{graph_name}-$ref_period->{name}.png";
         my $graph_title = sprintf '%s / %s / %s (%s)',
             $ctx->{machines}{$machine_id}{name}, $ref_graphdef->{label},
             $ctx->{today_str}, $ref_period->{label};
@@ -658,6 +661,7 @@ sub generate_graphic_dynamic
         my $color_roundrobin_idx = 0;
         my %static_graphdef = (
             name              => $ref_graphdef->{name},
+            graph_name        => $ref_graphdef->{name}.$device,
             type              => GRAPHDEFINITION_STATIC,
             periods           => [ @{$ref_graphdef->{periods}} ],
             label             => graphdef_template($ctx, $ref_graphdef->{label}, undef, { DEVICE => $device }),
