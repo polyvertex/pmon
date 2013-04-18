@@ -38,7 +38,7 @@ use constant
             desc    => 'Overview of your monitored machines',
         },
         machine => {
-            visible => 0,
+            visible => 1,
             title   => '%s',
             desc    => 'Status of %s',
         },
@@ -334,12 +334,12 @@ sub tmpl_body_machine__graphgroup
             $ref_nextgraph->{days} == 7)
         {
             my $img1 = $ctx->{cgi}->img({
-                src => File::Basename::basename($ref_graph->{file}),
-                alt => $ref_graph->{title},
+                src   => File::Basename::basename($ref_graph->{file}),
+                title => $ref_graph->{title},
             });
             my $img2 = $ctx->{cgi}->img({
-                src => File::Basename::basename($ref_nextgraph->{file}),
-                alt => $ref_nextgraph->{title},
+                src   => File::Basename::basename($ref_nextgraph->{file}),
+                title => $ref_nextgraph->{title},
             });
 
             $output .=
@@ -353,8 +353,8 @@ sub tmpl_body_machine__graphgroup
         else
         {
             my $img = $ctx->{cgi}->img({
-                src => File::Basename::basename($ref_graph->{file}),
-                alt => $ref_graph->{title},
+                src   => File::Basename::basename($ref_graph->{file}),
+                title => $ref_graph->{title},
             });
 
             $output .=
@@ -407,9 +407,20 @@ EOV
 
         if (defined($rows) and @$rows > 0)
         {
-            $output .=
-                "  <tr><td colspan=2>&nbsp;</td></tr>\n"
-                if keys(%displayed_defnames) > 0;
+            if (keys(%displayed_defnames) > 0)
+            {
+                $output .= "  <tr><td colspan=2>&nbsp;</td></tr>\n";
+            }
+            else
+            {
+                $output .=
+                    "  <tr><td colspan=2><code>Updated ".
+                    time_duration2str($ctx->{now} - $rows->[0]{unix}).
+                    " ago at ".datetime_utcstr($rows->[0]{unix}).
+                    " (UTC)</code></td></tr>\n".
+                    "  <tr><td colspan=2>&nbsp;</td></tr>\n";
+            }
+
             $output .=
                 "  <tr>\n".
                 "    <th colspan=2>".$rows->[0]{title}."</th>\n".
