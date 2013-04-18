@@ -98,29 +98,29 @@ use constant
             days         => 1,
             name         => 'day',
             label        => "Today",
-            graph_width  => 500,
-            graph_height => 100,
+            graph_width  => 450,
+            graph_height => 180,
         },
         7 => {
             days         => 7,
             name         => 'week',
             label        => "Week",
-            graph_width  => 500,
-            graph_height => 100,
+            graph_width  => 450,
+            graph_height => 180,
         },
         30 => {
             days         => 30,
             name         => 'month',
             label        => "Month",
-            graph_width  => 1000,
-            graph_height => 60,
+            graph_width  => 900,
+            graph_height => 150,
         },
         365 => {
             days         => 365,
             name         => 'year',
             label        => "Year",
-            graph_width  => 1000,
-            graph_height => 60,
+            graph_width  => 900,
+            graph_height => 150,
         },
     },
 };
@@ -605,7 +605,8 @@ sub generate_graphic_static
             "--end $ctx->{now} ".
             "--title \"$graph_title\" ".
             "--width $ref_period->{graph_width} ".
-            "--height $ref_period->{graph_height} ";
+            "--height $ref_period->{graph_height} ".
+            "--full-size-mode ";
 
         $cmd .= /^([^\s]+)\s(.*)$/ ? "$1 \"$2\" " : "$_ "
             foreach (@{$ref_graphdef->{rrd_graph_options}});
