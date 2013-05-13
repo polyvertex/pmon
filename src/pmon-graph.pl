@@ -611,13 +611,14 @@ sub generate_graphic_static
         $cmd .= /^([^\s]+)\s(.*)$/ ? "$1 \"$2\" " : "$_ "
             foreach (@{$ref_graphdef->{rrd_graph_options}});
 
-        foreach my $arg (@{$ref_graphdef->{rrd_graph_def}}, @{$ref_graphdef->{rrd_graph_draw}})
+        foreach my $arg_ (@{$ref_graphdef->{rrd_graph_def}}, @{$ref_graphdef->{rrd_graph_draw}})
         {
+            my $arg = $arg_; # IMPORTANT because graphdef_template() use the lvalue version of substr()
             $arg = graphdef_template $ctx, $arg, \$color_roundrobin_idx,
                 { rrd_files => \%rrd_files };
             $cmd .= "\"$arg\" ";
         }
-
+        
         chomp(my @lines = qx/$cmd 2>&1/);
         die "Failed to generate $graph_file! Command: $cmd\n",
             "Output:\n  ", join("\n  ", @lines), "\n"
@@ -796,8 +797,11 @@ sub generate_machine_graphics
     {
         my $func_gengraph = main->can('generate_graphic_'.$ref_graphdef->{type});
         die unless defined $func_gengraph;
+        print "Generating '$ref_graphdef->{name}' ($ref_graphdef->{type}) graph for machine $machine_id...\n";
         $func_gengraph->($ctx, $machine_id, $ref_graphdef);
     }
+
+    print "\n";
 }
 
 #-------------------------------------------------------------------------------
