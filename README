@@ -1,0 +1,11 @@
+PMon
+
+A small monitoring system for Linux (tested on Debian only) based on a
+service/node architecture. The client script (node), which is highly inspired
+from OVH's RTM client script (ovh.com), sends periodically informations about
+the monitored machines to the server. Every informations sent by the nodes are
+stored in a SQL database by a daemon on the server and graphics can be generated
+through the use of RRDTool intermediate databases.
+
+Jean-Charles Lefebvre <jcl [AT] jcl [DOT] io>
+http://www.jcl.io
