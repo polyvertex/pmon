@@ -301,7 +301,7 @@ sub commit_info
             else
             {
                 eval { $err = $self->{dbh}->err; };
-                $err = '?'
+                $err = '?';
                 warn "Unknown DB error #$err occurred!";
                 $err = undef;
                 # TODO: should we reconnect here?
