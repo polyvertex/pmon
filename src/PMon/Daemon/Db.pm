@@ -158,6 +158,7 @@ sub commit_info
     my ($self, $machine_name, $unix, $key, $value) = @_;
     my $machine_id = $self->_machine_id($machine_name);
     my $err;
+    my $need_to_rollback;
     my $cache_key;
     my $cache_rowid;
     my $cache_unix;
@@ -180,11 +181,14 @@ sub commit_info
         $cache_value = $self->{cache}{$cache_key}{value};
     }
 
-    # start transaction mode
-    $self->{dbh}{AutoCommit} = 0;
+    # db transaction
     eval
     {
         my ($sth, $res, $row);
+
+        # start transaction mode
+        $self->{dbh}{AutoCommit} = 0;
+        $need_to_rollback = 1;
 
         # insert info into the normal 'log' table
         if ($self->{full_log})
@@ -202,7 +206,7 @@ sub commit_info
         # we insert a row into the logatom table only when the value of a key
         # on the same machine is new or is different than the previous one.
         {
-            my $just_update = 0; # by default, we choose to insert 
+            my $just_update = 0; # by default, we choose to insert
 
             # do we already have this info with the same value?
             if (defined($cache_rowid) and defined($cache_value) and defined($cache_unix))
@@ -276,20 +280,37 @@ sub commit_info
     {
         $return = 0;
         warn $@;
-        $self->{dbh}->rollback
-            or warn "Failed to rollback transaction after errors (", $self->{dbh}->err, ")! ", $self->{dbh}->errstr, "\n";
-        if (defined($err) and 
-            $self->{dbh}{Driver}{Name} eq 'mysql' and
-            $err == MYSQLERR_SERVER_GONE_ERROR)
+        if ($need_to_rollback)
         {
-            warn "Reconnecting to database...\n";
-            $poe_kernel->yield('db_disconnect', 0);
-            $poe_kernel->yield('db_connect');
+            $self->{dbh}->rollback
+                or warn "Failed to rollback transaction after errors (", $self->{dbh}->err, ")! ", $self->{dbh}->errstr, "\n";
+        }
+        if ($self->{dbh}{Driver}{Name} eq 'mysql')
+        {
+            if (defined($err) and $err == MYSQLERR_SERVER_GONE_ERROR)
+            {
+                warn "Reconnecting to database...\n";
+                $poe_kernel->yield('db_disconnect', 0);
+                $poe_kernel->yield('db_connect');
+            }
+            elsif (defined $err)
+            {
+                warn "DB error #$err occurred!";
+                # TODO: should we reconnect here?
+            }
+            else
+            {
+                eval { $err = $self->{dbh}->err; };
+                $err = '?'
+                warn "Unknown DB error #$err occurred!";
+                $err = undef;
+                # TODO: should we reconnect here?
+            }
         }
     }
 
     # restore default mode
-    $self->{dbh}{AutoCommit} = 1;
+    eval { $self->{dbh}{AutoCommit} = 1; };
 
     # update cache but first ensure it doesn't get too big
     unless (exists $self->{cache}{$cache_key})
