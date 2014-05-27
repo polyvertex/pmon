@@ -107,7 +107,7 @@ sub smart_info
         my $cmd   = "smartctl -a /dev/$devname";
         my @lines = qx/$cmd/;
         die "Failed to run command '$cmd' (code ", sprintf('0x%X', $?), ")!\n"
-            unless $? == 0;
+            unless $? == 0 || $? == 0x4000; # bypass some dummy errors
 
         chomp(@lines);
 
