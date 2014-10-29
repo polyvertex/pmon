@@ -139,7 +139,7 @@
                 'LINE1:loadavg1#{COLOR:blue_dark}:Average 1min',
             ],
         },
- 
+
         {
             name    => 'net',
             type    => GRAPHDEFINITION_DYNAMIC,
@@ -210,7 +210,7 @@
         {
             name    => 'stortemp',
             type    => GRAPHDEFINITION_DYNAMIC_ONEGRAPH,
-            periods => [ 1, 7 ],
+            periods => [ 1, 7, 30, 365 ],
             label   => "HDD Temperature",
             vname   => qr/^hdd\.([^\.]+)\.temp$/, # {DEVICE}=$1
             values  => [
