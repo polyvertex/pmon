@@ -495,7 +495,7 @@ my %ctx = ( # global context
 
 BEGIN { $| = 1; }
 
-# try to get agent's revision number
+# try to get revision number
 if (-e DEFAULT_REVISION_FILE)
 {
     if (open my $fh, '<', DEFAULT_REVISION_FILE)
