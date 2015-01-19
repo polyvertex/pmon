@@ -1,11 +1,15 @@
 PMon
+A small monitoring system for Linux written in Perl.
 
-A small monitoring system for Linux (tested on Debian only) based on a
-service/node architecture. The client script (node), which is highly inspired
-from OVH's RTM client script (ovh.com), sends periodically informations about
-the monitored machines to the server. Every informations sent by the nodes are
-stored in a SQL database by a daemon on the server and graphics can be generated
-through the use of RRDTool intermediate databases.
+The client script (agent), installed on every machines to monitor, is
+periodically launched as a cron job to send some statistics to the remote
+service about the cpu, memory, storage, etc...
+These statistics are then stored by the service (a daemon) in a SQL database
+(any backend will do) and used to build graphics that can be published through a
+dynamically created website.
 
-Jean-Charles Lefebvre <jcl [AT] jcl [DOT] io>
+Tested on Debian only.
+The client script is highly inspired from OVH's RTM client script (ovh.com).
+
+Jean-Charles Lefebvre <polyvertex@gmail.com>
 http://www.jcl.io

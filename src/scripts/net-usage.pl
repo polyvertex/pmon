@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
 #
 # PMon
-# A personal monitoring system for Linux based on a service/node architecture.
+# A small monitoring system for Linux written in Perl.
 #
-# Copyright (C) 2013 Jean-Charles Lefebvre <jcl [AT] jcl [DOT] io>
+# Copyright (C) 2013-2015 Jean-Charles Lefebvre <polyvertex@gmail.com>
 #
 # This software is provided 'as-is', without any express or implied
 # warranty.  In no event will the authors be held liable for any damages
@@ -21,11 +21,7 @@
 #    be misrepresented as being the original software.
 # 3. This notice may not be removed or altered from any source distribution.
 #
-#
-# Author:     Jean-Charles Lefebvre
 # Created On: 2013-03-11 15:16:59Z
-#
-# $Id$
 #
 
 use strict;
