@@ -243,7 +243,7 @@ EOV
 sub tmpl_footer
 {
     my $ctx = shift;
-    my $desc = lc TITLE_CAPTION.' v'.$ctx->{revision};
+    my $desc = lc TITLE_CAPTION.' '.substr($ctx->{revision}, 0, 7);
     my $author_link = $ctx->{cgi}->a({
             href   => 'http://'.AUTHOR_WWW.'/',
             #target => '_blank',
@@ -498,7 +498,7 @@ if (-e DEFAULT_REVISION_FILE)
     {
         $ctx{revision} = <$fh>;
         chomp $ctx{revision};
-        $ctx{revision} = 0 unless $ctx{revision} =~ /^\d+$/;
+        $ctx{revision} = 0 unless $ctx{revision} =~ /^[\da-f]{4,40}$/;
         close $fh;
     }
 }

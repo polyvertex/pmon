@@ -222,7 +222,7 @@ if (-e REVISION_FILE)
     {
         $revision = <$fh>;
         chomp $revision;
-        $revision = 0 unless $revision =~ /^\d+$/;
+        $revision = 0 unless $revision =~ /^[\da-f]{4,40}$/;
         close $fh;
     }
 }

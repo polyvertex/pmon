@@ -25,27 +25,29 @@
 #
 
 # default configuration
-[ -z "$PMON_URL" ]      && PMON_URL="https://svn.jcl.io/pmon/trunk/src/"
-[ -z "$PMON_SVN_USER" ] && PMON_SVN_USER=""
-[ -z "$PMON_GROUP" ]    && PMON_GROUP="www-data"
+[ -z "$PMON_REPO_URL" ]    && declare -r PMON_REPO_URL="https://github.com/polyvertex/pmon.git"
+[ -z "$PMON_REPO_BRANCH" ] && declare -r PMON_REPO_BRANCH="master"
+[ -z "$PMON_REPO_DIR" ]    && declare -r PMON_REPO_DIR="src" # can be empty; we want to get only what's in: $PMON_REPO_URL/$PMON_REPO_DIR
+[ -z "$PMON_GROUP" ]       && declare -r PMON_GROUP="www-data"
 
 
 #-------------------------------------------------------------------------------
 # get the real path of this script
-THIS_SCRIPT=${BASH_SOURCE[0]}
-while [ -h "$THIS_SCRIPT" ]; do # resolve $THIS_SCRIPT until the file is no longer a symlink
-    DIR=$(cd -P "$(dirname "$THIS_SCRIPT")" && pwd)
-    THIS_SCRIPT=$(readlink "$THIS_SCRIPT")
-    # if $THIS_SCRIPT was a relative symlink, we need to resolve it relative to the
+_TMP_PATH=${BASH_SOURCE[0]}
+while [ -h "$_TMP_PATH" ]; do # resolve $_TMP_PATH until the file is no longer a symlink
+    DIR=$(cd -P "$(dirname "$_TMP_PATH")" && pwd)
+    _TMP_PATH=$(readlink "$_TMP_PATH")
+    # if $_TMP_PATH was a relative symlink, we need to resolve it relative to the
     # path where the symlink file was located
-    [[ "$THIS_SCRIPT" != /* ]] && THIS_SCRIPT="$DIR/$THIS_SCRIPT"
+    [[ "$_TMP_PATH" != /* ]] && _TMP_PATH="$DIR/$_TMP_PATH"
+    unset DIR
 done
-THIS_SCRIPT_DIR=$(cd -P "$(dirname "$THIS_SCRIPT")" && pwd)
-THIS_SCRIPT_NAME=$(basename "$THIS_SCRIPT")
+declare -r THIS_SCRIPT="$_TMP_PATH"; unset _TMP_PATH
+declare -r THIS_SCRIPT_DIR="$(cd -P "$(dirname "$THIS_SCRIPT")" && pwd)"
+declare -r THIS_SCRIPT_NAME="$(basename "$THIS_SCRIPT")"
 
 # global parameters
 ACTION=""
-REVISION=""
 INSTALL_DIR=""
 INSTALL_AGENT=0
 INSTALL_DAEMON=0
@@ -53,26 +55,27 @@ INSTALL_DAEMON=0
 # global variables
 INSTALL_STAGE=0
 TMP_DIR=""
+TMP_DIR_FETCHEDFILES=""
 TMP_DIR_INSTALLSRC=""
 TMP_FILE=""
 TMP="" # no special purpose, a unique swap variable used thorough this script
 
 
 #-------------------------------------------------------------------------------
-function usage()
+usage()
 {
     echo "Usage:"
     echo ""
-    echo "* $THIS_SCRIPT_NAME install-all [install_dir] [revision]"
+    echo "* $THIS_SCRIPT_NAME install-all [install_dir]"
     echo "  To install or update the PMon Daemon (server) and the PMon Agent"
     echo "  altogether in the specified directory or, by default, in the same"
     echo "  directory than this script."
     echo ""
-    echo "* $THIS_SCRIPT_NAME install-agent [install_dir] [revision]"
+    echo "* $THIS_SCRIPT_NAME install-agent [install_dir]"
     echo "  To install or update the PMon Agent in the specified directory or,"
     echo "  by default, in the same directory than this script."
     echo ""
-    echo "* $THIS_SCRIPT_NAME install-daemon [install_dir] [revision]"
+    echo "* $THIS_SCRIPT_NAME install-daemon [install_dir]"
     echo "  To install or update the PMon Daemon (server) in the specified"
     echo "  directory or, by default, in the same directory than this script."
     echo ""
@@ -87,28 +90,32 @@ function usage()
     echo "  the chgrp command will not be invoked during the post-install"
     echo "  process. Current value: $PMON_GROUP"
     echo ""
-    echo "* PMON_URL"
-    echo "  Defines the URL used by the subversion client to fetch the"
-    echo "  installation files. Current value:"
-    echo "  $PMON_URL"
+    echo "* PMON_REPO_URL"
+    echo "  Defines the URL used by the git client to fetch the installation"
+    echo "  files. Current value:"
+    echo "  $PMON_REPO_URL"
     echo ""
-    echo "* PMON_SVN_USER"
-    echo "  Forces the user name used by the subversion client to fetch the"
-    echo "  installation files. It is a 'just-in-case' variable available for"
-    echo "  convenience only. You should never need it."
+    echo "* PMON_REPO_BRANCH"
+    echo "  Defines the name of the branch of the git repository to fetch."
+    echo "  Current value: $PMON_REPO_BRANCH"
     echo ""
 }
 
 #-------------------------------------------------------------------------------
-function cleanup()
+cleanup()
 {
-    [ -n "$TMP_FILE" -a  -e "$TMP_FILE" ] && rm -f "$TMP_FILE"
-    [ -n "$TMP_DIR_INSTALLSRC" -a  -e "$TMP_DIR_INSTALLSRC" ] && rm -rf "$TMP_DIR_INSTALLSRC"
-    [ -n "$TMP_DIR" -a  -e "$TMP_DIR" ] && rm -rf "$TMP_DIR"
+    [ -n "$TMP_FILE" -a  -e "$TMP_FILE" ] \
+        && rm -f "$TMP_FILE"
+    [ -n "$TMP_DIR_INSTALLSRC" -a  -e "$TMP_DIR_INSTALLSRC" ] \
+        && rm -rf "$TMP_DIR_INSTALLSRC"
+    [ -n "$TMP_DIR_FETCHEDFILES" -a  -e "$TMP_DIR_FETCHEDFILES" ] \
+        && rm -rf "$TMP_DIR_FETCHEDFILES"
+    [ -n "$TMP_DIR" -a  -e "$TMP_DIR" ] \
+        && rm -rf "$TMP_DIR"
 }
 
 #-------------------------------------------------------------------------------
-function die()
+die()
 {
     local code=$1
     shift
@@ -116,7 +123,7 @@ function die()
 
     cleanup
 
-    [ "$code" != "0" ] && msg="*** ERROR: $msg"
+    [ "$code" != "0" ] && msg="** ERROR: $msg"
     echo "$msg"
 
     if [ -n "$TMP_DIR" -a -e "$TMP_DIR" ]; then
@@ -131,7 +138,7 @@ function die()
 }
 
 #-------------------------------------------------------------------------------
-#function cmp_files()
+#cmp_files()
 #{
 #    # returns 0 when files are equal or a non null value otherwise
 #
@@ -146,12 +153,12 @@ function die()
 #    [ "$tmpa" != "$tmpb" ] && return 1
 #
 #    # check content byte-per-byte
-#    type cmp &> /dev/null
+#    type -t cmp &>/dev/null
 #    if [ $? -eq 0 ]; then
 #        cmp --quiet "$a" "$b"
 #        return $?
 #    else
-#        type md5sum &> /dev/null
+#        type -t md5sum &>/dev/null
 #        [ $? -eq 0 ] || die 1 "Could not find a way to compare files on a byte-per-byte basis. Please install either 'cmp' or 'md5sum' command!"
 #        tmpa=$(md5sum "$a" | cut -d' ' -f1)
 #        tmpb=$(md5sum "$b" | cut -d' ' -f1)
@@ -161,7 +168,7 @@ function die()
 #}
 
 #-------------------------------------------------------------------------------
-function init_vars()
+init_vars()
 {
     [ -z "$TMP_DIR" ] && TMP_DIR=$(mktemp -d)
     [ -n "$TMP_DIR" -a -d "$TMP_DIR" ] || \
@@ -171,37 +178,52 @@ function init_vars()
     touch "$TMP_FILE" || die 1 "Failed to create temp file!"
     rm "$TMP_FILE"
 
+    TMP_DIR_FETCHEDFILES="$TMP_DIR/fetchedfiles"
     TMP_DIR_INSTALLSRC="$TMP_DIR/installsource"
 }
 
 #-------------------------------------------------------------------------------
-function fetch_install_files()
+fetch_install_files()
 {
     local configscript="$1"
 
+    [ -e "$TMP_DIR_FETCHEDFILES" ] || mkdir -p "$TMP_DIR_FETCHEDFILES"
     [ -e "$TMP_DIR_INSTALLSRC" ] || mkdir -p "$TMP_DIR_INSTALLSRC"
 
-    # export content of the svn repository
-    TMP=""
-    [ -n "$PMON_SVN_USER" ] && TMP="user ${PMON_SVN_USER}; "
-    echo "Fecthing SVN copy from $PMON_URL (${TMP}rev $REVISION)..."
-    [ -n "$PMON_SVN_USER" ] && TMP="--username $PMON_SVN_USER --no-auth-cache"
-    svn export \
-        --force \
-        --revision $REVISION $TMP \
-        "$PMON_URL" "$TMP_DIR_INSTALLSRC" > "$TMP_FILE"
-    [ $? -eq 0 ] || die 1 "Failed to fetch SVN copy!"
-    echo
+    # fetch remote files into the swap dir
+    echo "Cloning from $PMON_REPO_URL ($PMON_REPO_BRANCH)..."
+    (
+        set -e
+        export GIT_SSL_NO_VERIFY=1
+        git clone --quiet --single-branch --depth=1 \
+            --branch "$PMON_REPO_BRANCH" \
+            -- "$PMON_REPO_URL" "$TMP_DIR_FETCHEDFILES"
+    ) || die 1 "Failed to install files"
 
-    # extract revision number
-    REVISION=$(grep '^Exported revision' "$TMP_FILE" | cut -d' ' -f3 | tr -d '.')
-    #rm -f "$TMP_FILE"
-    [ -z "$REVISION" ] && die 1 "Failed to get SVN revision number!"
-    echo "Downloaded revision $REVISION."
+    # read commit's hash to identify this revision
+    local -r COMMIT_HASH="$(cd "$TMP_DIR_FETCHEDFILES" && git rev-list -n 1 "$PMON_REPO_BRANCH")"
+    [[ -n "$COMMIT_HASH" && "$COMMIT_HASH" =~ ^[0-9a-f]{40}$ ]] \
+        || die 1 "Failed to read commit hash from local clone"
+    echo "Downloaded revision $COMMIT_HASH"
 
-    # keep trace of the revision number
-    echo "$REVISION" > "$TMP_DIR_INSTALLSRC/.revision"
-    date '+%Y-%m-%d %H:%M:%S' > "$TMP_DIR_INSTALLSRC/.timestamp"
+    # select local files
+    # because git-clone does not allow us to fetch only a subtree, we had to
+    # clone the whole source tree locally. know we can copy only the source
+    # sub-directory we need (i.e.: PMON_REPO_DIR) to the TMP_DIR_INSTALLSRC dir.
+    # CAUTION: remember that $PMON_REPO_DIR can be empty
+    (
+        set -e
+        cd "$TMP_DIR_FETCHEDFILES/$PMON_REPO_DIR"
+        mv * "$TMP_DIR_INSTALLSRC"
+        { [ -e .[^.]* ] && mv .[^.]* "$TMP_DIR_INSTALLSRC"; } || true
+    ) || die 1 "Failed to install cloned files"
+
+    # we no longer need the swap dir
+    rm -rf "$TMP_DIR_FETCHEDFILES"
+
+    # keep track of the revision
+    echo "$COMMIT_HASH" >"$TMP_DIR_INSTALLSRC/.revision"
+    date "+%Y-%m-%d %H:%M:%S %z" >"$TMP_DIR_INSTALLSRC/.timestamp"
 
     # ensure the config script exists and is executable
     [ -e "$configscript" ] || die 1 "Updated install script does not exist \"$configscript\"!"
@@ -210,7 +232,7 @@ function fetch_install_files()
 }
 
 #-------------------------------------------------------------------------------
-function install_stage_1()
+install_stage_1()
 {
     # check destination directory (first pass)
     if [ ! -e "$INSTALL_DIR" ]; then
@@ -239,19 +261,18 @@ function install_stage_1()
 }
 
 #-------------------------------------------------------------------------------
-function install_stage_2()
+install_stage_2()
 {
     local first_install_daemon=1
     local first_install_agent=1
     local restart_daemon=0
     local tmp
 
-
     # some third-party commands will be used by the agent
     # hope we won't fail to keep this list actualized...
     if [ $INSTALL_AGENT -ne 0 ]; then
         for cmd in cat df free grep hddtemp head ls ps smartctl uname; do
-            type $cmd &> /dev/null
+            type -t $cmd &>/dev/null
             [ $? -eq 0 ] || die 1 "Command '$cmd' not found! It is used by the Agent."
         done
     fi
@@ -283,11 +304,11 @@ function install_stage_2()
     [ -e "$INSTALL_DIR/bin/pmon-agent.pl" ] && first_install_agent=0
 
     # cleanup destination directory (do not 'set -e' here!)
-    rm -f "$INSTALL_DIR/etc/*.dist" &> /dev/null
-    rm -f "$INSTALL_DIR/var/*.pid" &> /dev/null
-    mv -f "$INSTALL_DIR/var/pmon-daemon.log" "$INSTALL_DIR/var/pmon-daemon.log.1" &> /dev/null
+    rm -f "$INSTALL_DIR/etc/*.dist" &>/dev/null
+    rm -f "$INSTALL_DIR/var/*.pid" &>/dev/null
+    mv -f "$INSTALL_DIR/var/pmon-daemon.log" "$INSTALL_DIR/var/pmon-daemon.log.1" &>/dev/null
     [ $INSTALL_AGENT -ne 0 -a $INSTALL_DAEMON -ne 0 ] && \
-        rm -rf "$INSTALL_DIR/bin" &> /dev/null
+        rm -rf "$INSTALL_DIR/bin" &>/dev/null
 
     # install revision files
     mv -f "$TMP_DIR_INSTALLSRC/.revision" "$INSTALL_DIR/"
@@ -341,8 +362,8 @@ function install_stage_2()
         chmod 0750 "$INSTALL_DIR/bin/pmon-agent.pl"
 
         # embed the Config module into the main script
-        echo >> "$INSTALL_DIR/bin/pmon-agent.pl"
-        cat "$TMP_DIR_INSTALLSRC/PMon/Config.pm" >> "$INSTALL_DIR/bin/pmon-agent.pl"
+        echo >>"$INSTALL_DIR/bin/pmon-agent.pl"
+        cat "$TMP_DIR_INSTALLSRC/PMon/Config.pm" >>"$INSTALL_DIR/bin/pmon-agent.pl"
         [ $? -eq 0 ] || die 1 "Failed to embed Config module into pmon-agent.pl!"
     fi
 
@@ -361,8 +382,8 @@ function install_stage_2()
         chmod 0750 "$INSTALL_DIR/var/htdocs/index.pl"
 
         # embed the Config module into the cgi script
-        echo >> "$INSTALL_DIR/var/htdocs/index.pl"
-        cat "$INSTALL_DIR/bin/PMon/Config.pm" >> "$INSTALL_DIR/var/htdocs/index.pl"
+        echo >>"$INSTALL_DIR/var/htdocs/index.pl"
+        cat "$INSTALL_DIR/bin/PMon/Config.pm" >>"$INSTALL_DIR/var/htdocs/index.pl"
         [ $? -eq 0 ] || die 1 "Failed to embed Config module into CGI script!"
     fi
 
@@ -378,7 +399,8 @@ function install_stage_2()
 
     # adjust access rights
     chmod -R o-rwx "$INSTALL_DIR"
-    [ $INSTALL_DAEMON -ne 0 -a -n "$PMON_GROUP" ] && chgrp -R "$PMON_GROUP" "$INSTALL_DIR"
+    [ $INSTALL_DAEMON -ne 0 -a -n "$PMON_GROUP" ] \
+        && chgrp -R "$PMON_GROUP" "$INSTALL_DIR"
 
     # try to restart daemon if needed
     if [ $restart_daemon -ne 0 ]; then
@@ -403,7 +425,7 @@ function install_stage_2()
             echo "* Check agent's config:"
             echo "    $INSTALL_DIR/etc/pmon-agent.conf"
             echo "* Configure root's cron to run the agent every minutes:"
-            echo "    */1 * * * * $INSTALL_DIR/bin/pmon-agent.pl > /dev/null"
+            echo "    */1 * * * * $INSTALL_DIR/bin/pmon-agent.pl >/dev/null"
         fi
         echo
     fi
@@ -412,9 +434,8 @@ function install_stage_2()
 
 
 #-------------------------------------------------------------------------------
-for cmd in basename bash cat chmod chown cp cut date dirname getent grep head ln mktemp mv readlink rm stat svn touch tr; do
-    type $cmd &> /dev/null
-    [ $? -eq 0 ] || die 1 "Required command '$cmd' not found!"
+for cmd in basename bash cat chmod chown cp cut date dirname getent git grep head ln mktemp mv readlink rm stat touch tr; do
+    type -t $cmd &>/dev/null || die 1 "'$cmd' command is required!"
 done
 
 if [ -n "$PMON_GROUP" ]; then
@@ -423,15 +444,15 @@ if [ -n "$PMON_GROUP" ]; then
 fi
 
 # special running cases to perform minimalistic actions
-# if you modify this section, it is more likely that the user will have to
-# download and overwrite his own local copy of this script before being able
+# if you modify this section, it is more likely that the user will MANUALLY have
+# to download and overwrite his own local copy of this script before being able
 # to install/upgrade whithout any trouble...
 if [ "$1" == "priv-install-stage1" ]; then
     INSTALL_STAGE=1
     echo "Entered stage $INSTALL_STAGE ($THIS_SCRIPT)..."
     TMP_DIR="$2"
     TMP="$3" # the original calling script (we want to delete it)
-    rm -f "$TMP" &> /dev/null
+    rm -f "$TMP" &>/dev/null
     [ -d "$TMP_DIR" ] || die 1 "Given temp dir does not exists (stage $INSTALL_STAGE; $TMP_DIR)!"
     shift 3
 elif [ "$1" == "priv-install-stage2" ]; then
@@ -461,11 +482,9 @@ fi
 
 ACTION="$1"
 INSTALL_DIR="$2"
-REVISION="$3"
 
-[ -z "$ACTION" ] && usage && exit 1
+[ -z "$ACTION" ] && { usage; exit 1; }
 [ -z "$INSTALL_DIR" ] && INSTALL_DIR="$THIS_SCRIPT_DIR"
-[ -z "$REVISION" ] && REVISION="HEAD"
 
 case "$ACTION" in
     install-all)
@@ -494,7 +513,7 @@ case "$ACTION" in
             fetch_install_files "$TMP_DIR_INSTALLSRC/config.sh" # safer to hard-code the name of the script here!
             exec "$TMP_DIR_INSTALLSRC/config.sh" \
                 "priv-install-stage1" "$TMP_DIR" \
-                "$THIS_SCRIPT" "$ACTION" "$INSTALL_DIR" "$REVISION"
+                "$THIS_SCRIPT" "$ACTION" "$INSTALL_DIR"
         elif [ $INSTALL_STAGE -eq 1 ]; then
             # first stage: THIS_SCRIPT is now running from TMP_DIR. our only
             # goal here is to copy THIS_SCRIPT to the INSTALL_DIR and then
@@ -504,7 +523,7 @@ case "$ACTION" in
             install_stage_1
             exec "$INSTALL_DIR/$THIS_SCRIPT_NAME" \
                 "priv-install-stage2" "$TMP_DIR" \
-                "$ACTION" "$INSTALL_DIR" "$REVISION"
+                "$ACTION" "$INSTALL_DIR"
         elif [ $INSTALL_STAGE -eq 2 ]; then
             # second stage: we are running from the install dir and we are ready
             # to install... after the install process, since we cannot delete
